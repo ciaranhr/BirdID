@@ -132,7 +132,8 @@ def test_gallery_filter_and_order_chips_requery(app, net, sp):
 def test_gallery_error_is_shown(app, net, sp, allow_http_errors):
     net.status = 404
     open_species(app, sp("Australian Magpie"))
-    expect(app.locator(".loading")).to_have_text("Couldn't load photos: HTTP 404")
+    expect(app.locator(".loading")).to_contain_text("Couldn't load photos: HTTP 404")
+    expect(app.locator(".loading button")).to_have_text("Retry")
 
 
 def test_gallery_with_no_results(app, net, sp):
@@ -281,3 +282,80 @@ def test_species_thumbnails_use_crossorigin_only_where_supported(app):
         src = img.get_attribute("src")
         expected = "anonymous" if "s3.amazonaws.com" in src else None
         assert img.get_attribute("crossorigin") == expected, src
+
+
+# ---------- regressions from the code review ----------
+
+def test_gallery_retry_after_error(app, net, sp, allow_http_errors):
+    net.status = 404
+    open_species(app, sp("Australian Magpie"))
+    expect(app.locator(".loading")).to_contain_text("Couldn't load photos: HTTP 404")
+    net.status = 200
+    app.locator(".loading button", has_text="Retry").click()
+    expect(app.locator(".gallery button")).to_have_count(PAGE1_PHOTOS)
+    assert [c["page"] for c in net.api_calls] == ["1", "1"]  # the failed page is fetched again
+
+
+def test_strip_retry_after_error(app, net, sp, allow_http_errors):
+    a, b = sp("Australian Magpie"), sp("Magpie-lark")
+    net.status = 404
+    app.goto(f"/#/c/{a['id']},{b['id']}")
+    expect(app.locator("[data-strip] .loading button", has_text="Retry")).to_have_count(2)
+    net.status = 200
+    app.locator("[data-strip='0'] .loading button").click()
+    expect(app.locator("[data-strip='0'] .strip button").first).to_be_visible()
+
+
+def test_grid_keeps_loading_when_a_page_is_too_short_to_scroll(app, net, sp):
+    """Page 1 yields one photo, so the scroll sentinel never leaves the viewport."""
+    net.dead_on_page1 = 29
+    net.api_delay = 0.3  # page 1 arrives after the observer's first callback, so it won't fire again
+    open_species(app, sp("Australian Magpie"))
+    expect(app.locator(".gallery button")).to_have_count(1 + 15)  # page 2 loads without scrolling
+
+
+def test_strip_keeps_loading_when_a_page_is_too_narrow_to_scroll(app, net, sp):
+    net.dead_on_page1 = 29
+    a, b = sp("Australian Magpie"), sp("Magpie-lark")
+    app.goto(f"/#/c/{a['id']},{b['id']}")
+    expect(app.locator("[data-strip='0'] .strip button")).to_have_count(1 + 15)
+
+
+def test_double_escape_closes_lightbox_without_leaving_the_page(app, sp):
+    magpie = sp("Australian Magpie")
+    open_species(app, magpie)
+    app.locator(".gallery button").first.click()
+    expect(app.locator("#lightbox")).to_be_visible()
+    # two presses before the first history.back() has been processed
+    app.evaluate("""() => { for (let i = 0; i < 2; i++)
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); }""")
+    expect(app.locator("#lightbox")).to_be_hidden()
+    app.wait_for_timeout(300)
+    expect(app).to_have_url(re.compile(rf"#/s/{magpie['id']}$"))
+    expect(app.locator("h1")).to_have_text("Australian Magpie")
+
+
+def test_double_close_on_picker_stays_on_the_page(app, sp):
+    magpie = sp("Australian Magpie")
+    open_species(app, magpie)
+    app.click("#cmp-any")
+    expect(app.locator("#picker")).to_be_visible()
+    app.evaluate("() => { const b = document.querySelector('#picker [data-close]'); b.click(); b.click(); }")
+    expect(app.locator("#picker")).to_be_hidden()
+    app.wait_for_timeout(300)
+    expect(app).to_have_url(re.compile(rf"#/s/{magpie['id']}$"))
+
+
+def test_similar_species_suggestions_exclude_hybrids(app, sp):
+    open_species(app, sp("Pacific Black Duck"))
+    chips = app.locator(".chip", has_text="vs ")
+    expect(chips.first).to_be_visible()
+    assert not [t for t in chips.all_inner_texts() if "×" in t]
+    expect(chips.filter(has_text="Chestnut Teal")).to_have_count(1)
+
+
+def test_duplicate_ids_in_compare_url_are_ignored(app, sp):
+    a = sp("Australian Magpie")
+    app.goto(f"/#/c/{a['id']},{a['id']}")
+    expect(app.locator(".cmp-chips .chip a")).to_have_count(1)
+    expect(app.locator("main")).to_contain_text("Pick 2–5 birds")

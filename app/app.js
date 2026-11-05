@@ -3,7 +3,7 @@
 // live photos from the iNaturalist API. Pure helpers live in lib.js.
 
 import {
-  WINGSPAN_FACTOR, esc, photoSize, fmtLen, fmtMass, genus, imgTag, setImgSrc,
+  WINGSPAN_FACTOR, esc, photoSize, fmtLen, fmtMass, genus, isHybrid, imgTag, setImgSrc,
   indexSpecies, search as searchIn, silDims, nearestBenchmarks as nearestIn,
 } from './lib.js';
 
@@ -143,6 +143,10 @@ class Gallery {
     }
     this.loading = false; this.emit();
   }
+  retry() {
+    this.error = null; this.done = false;
+    this.more();
+  }
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit() { this.listeners.forEach((fn) => fn(this)); }
 }
@@ -156,10 +160,14 @@ function filterChips(cur, order) {
   </div>`;
 }
 
-function gridGallery(container, gallery, label) {
-  container.innerHTML = '<div class="gallery"></div><div class="loading"></div><div class="sentinel"></div>';
-  const grid = container.querySelector('.gallery');
-  const status = container.querySelector('.loading');
+const RETRY = '<button type="button" class="link-btn" data-retry>Retry</button>';
+
+/**
+ * Shared wiring for the photo grid and the compare strips: append new thumbnails as pages arrive,
+ * show status (with a Retry button after an error), and keep loading while the visible area
+ * isn't full - otherwise a short first page leaves nothing to scroll and paging stalls.
+ */
+function wireGallery(container, gallery, label, { list, status, statusText, wantsMore }) {
   let shown = 0;
   const update = (g) => {
     for (; shown < g.items.length; shown++) {
@@ -168,45 +176,48 @@ function gridGallery(container, gallery, label) {
       b.innerHTML = imgTag(it.thumb);
       const idx = shown;
       b.onclick = () => Lightbox.open(g, idx, label);
-      grid.appendChild(b);
+      list.appendChild(b);
     }
-    status.textContent = g.error ? `Couldn't load photos: ${g.error}`
-      : g.loading ? 'Loading photos…'
-      : !g.items.length ? 'No photos match this filter.'
-      : g.done ? `${g.total?.toLocaleString()} observations` : '';
+    status.innerHTML = g.error ? `Couldn't load photos: ${esc(g.error)} ${RETRY}` : esc(statusText(g));
+    if (!g.loading && !g.done && !g.error) {
+      requestAnimationFrame(() => { if (container.isConnected && wantsMore()) gallery.more(); });
+    }
   };
+  status.addEventListener('click', (e) => { if (e.target.closest('[data-retry]')) gallery.retry(); });
   const off = gallery.on(update);
-  const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) gallery.more(); }, { rootMargin: '600px' });
-  io.observe(container.querySelector('.sentinel'));
   update(gallery);
   gallery.more();
+  return off;
+}
+
+function gridGallery(container, gallery, label) {
+  container.innerHTML = '<div class="gallery"></div><div class="loading"></div><div class="sentinel"></div>';
+  const sentinel = container.querySelector('.sentinel');
+  const MARGIN = 600;
+  const off = wireGallery(container, gallery, label, {
+    list: container.querySelector('.gallery'),
+    status: container.querySelector('.loading'),
+    statusText: (g) => (g.loading ? 'Loading photos…'
+      : !g.items.length ? 'No photos match this filter.'
+      : g.done ? `${g.total?.toLocaleString()} observations` : ''),
+    wantsMore: () => sentinel.getBoundingClientRect().top < innerHeight + MARGIN,
+  });
+  const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) gallery.more(); }, { rootMargin: `${MARGIN}px` });
+  io.observe(sentinel);
   return () => { off(); io.disconnect(); };
 }
 
 function stripGallery(container, gallery, label) {
   container.innerHTML = '<div class="strip"></div><div class="loading small"></div>';
   const strip = container.querySelector('.strip');
-  const status = container.querySelector('.loading');
-  let shown = 0;
-  const update = (g) => {
-    for (; shown < g.items.length; shown++) {
-      const it = g.items[shown];
-      const b = document.createElement('button');
-      b.innerHTML = imgTag(it.thumb);
-      const idx = shown;
-      b.onclick = () => Lightbox.open(g, idx, label);
-      strip.appendChild(b);
-    }
-    status.textContent = g.error ? `Couldn't load photos: ${g.error}`
-      : g.loading && !g.items.length ? 'Loading…' : !g.items.length && g.done ? 'No photos match this filter.' : '';
-  };
-  const off = gallery.on(update);
-  strip.addEventListener('scroll', () => {
-    if (strip.scrollLeft + strip.clientWidth > strip.scrollWidth - 500) gallery.more();
-  }, { passive: true });
-  update(gallery);
-  gallery.more();
-  return off;
+  const nearEnd = () => strip.scrollLeft + strip.clientWidth > strip.scrollWidth - 500;
+  strip.addEventListener('scroll', () => { if (nearEnd()) gallery.more(); }, { passive: true });
+  return wireGallery(container, gallery, label, {
+    list: strip,
+    status: container.querySelector('.loading'),
+    statusText: (g) => (g.loading && !g.items.length ? 'Loading…' : !g.items.length && g.done ? 'No photos match this filter.' : ''),
+    wantsMore: nearEnd,
+  });
 }
 
 // ---------- lightbox ----------
@@ -228,8 +239,9 @@ const Lightbox = (() => {
     if (i >= g.items.length - 4) g.more();
   };
   const go = (d) => { const n = i + d; if (n >= 0 && n < g.items.length) { i = n; render(); } };
-  const close = () => { if (!el.hidden) history.back(); };
-  const hide = () => { el.hidden = true; img.src = ''; off?.(); off = null; document.body.style.overflow = ''; };
+  let closing = false; // history.back() is async: a second Escape before popstate would leave the page
+  const close = () => { if (!el.hidden && !closing) { closing = true; history.back(); } };
+  const hide = () => { el.hidden = true; closing = false; img.src = ''; off?.(); off = null; document.body.style.overflow = ''; };
   el.querySelector('[data-close]').onclick = close;
   el.querySelector('.lb-prev').onclick = () => go(-1);
   el.querySelector('.lb-next').onclick = () => go(1);
@@ -269,18 +281,19 @@ const Picker = (() => {
     list.innerHTML = res.map((s) => resultItem(s, 'button')).join('') || '<li class="empty">No matches</li>';
   };
   input.addEventListener('input', show);
-  let picked = null;
+  let picked = null, closing = false;
+  const close = () => { if (!el.hidden && !closing) { closing = true; history.back(); } };
   list.addEventListener('click', (e) => {
     const b = e.target.closest('[data-id]');
-    if (!b) return;
+    if (!b || closing) return;
     picked = +b.dataset.id;
-    history.back(); // popstate handler below hides the sheet, then navigates
+    close(); // popstate handler below hides the sheet, then navigates
   });
-  el.querySelector('[data-close]').onclick = () => history.back();
-  el.addEventListener('click', (e) => { if (e.target === el) history.back(); });
+  el.querySelector('[data-close]').onclick = close;
+  el.addEventListener('click', (e) => { if (e.target === el) close(); });
   window.addEventListener('popstate', () => {
     if (el.hidden) return;
-    el.hidden = true; document.body.style.overflow = '';
+    el.hidden = true; closing = false; document.body.style.overflow = '';
     const id = picked, fn = cb;
     picked = null; cb = null;
     if (id != null) fn?.(id);
@@ -333,9 +346,10 @@ function similarSpecies(s) {
   const seen = new Set([s.id]);
   const push = (x, why) => { if (x && !seen.has(x.id)) { seen.add(x.id); out.push([x, why]); } };
   const g = genus(s);
-  SPECIES.filter((x) => genus(x) === g && x.obs >= 5).sort((a, b) => b.obs - a.obs).slice(0, 5).forEach((x) => push(x, 'same genus'));
+  const candidates = SPECIES.filter((x) => !isHybrid(x));
+  candidates.filter((x) => genus(x) === g && x.obs >= 5).sort((a, b) => b.obs - a.obs).slice(0, 5).forEach((x) => push(x, 'same genus'));
   if (s.len) {
-    SPECIES.filter((x) => x.family === s.family && x.len && Math.abs(x.len - s.len) / s.len <= 0.25 && x.obs >= 20)
+    candidates.filter((x) => x.family === s.family && x.len && Math.abs(x.len - s.len) / s.len <= 0.25 && x.obs >= 20)
       .sort((a, b) => b.obs - a.obs).slice(0, 5).forEach((x) => push(x, 'same family, similar size'));
   }
   return out.slice(0, 8);
@@ -522,7 +536,10 @@ function route() {
   const parts = path.split('/').filter(Boolean);
   const params = new URLSearchParams(qs || '');
   if (parts[0] === 's') viewSpecies(+parts[1]);
-  else if (parts[0] === 'c') viewCompare((parts[1] || '').split(',').filter(Boolean).map(Number), params.has('g') ? +params.get('g') : null);
+  else if (parts[0] === 'c') {
+    const ids = [...new Set((parts[1] || '').split(',').filter(Boolean).map(Number))];
+    viewCompare(ids, params.has('g') ? +params.get('g') : null);
+  }
   else if (parts[0] === 'about') viewAbout();
   else viewHome();
   window.scrollTo(0, 0);

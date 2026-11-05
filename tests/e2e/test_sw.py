@@ -199,7 +199,7 @@ def test_offline_reload_with_real_worker(browser, base_url, groups):
         page.goto("/#/about")  # no external images on this page
         page.wait_for_selector("text=What this is")
         page.evaluate("() => navigator.serviceWorker.ready")
-        page.wait_for_function("() => caches.has('shell-v2')")
+        page.wait_for_function("async () => (await caches.keys()).includes('shell-dev')")
         ctx.set_offline(True)
         page.goto("/#/")
         page.wait_for_selector(".group-card")

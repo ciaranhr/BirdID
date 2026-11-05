@@ -22,6 +22,8 @@ export const photoSize = (url, size) => (url || '').replace(/\/(square|small|med
 export const fmtLen = (s) => (s.len ? `${s.lenMin && s.lenMax && s.lenMin !== s.lenMax ? `${s.lenMin}–${s.lenMax}` : s.len} cm` : '—');
 export const fmtMass = (g) => (!g ? '—' : g >= 1000 ? `${(g / 1000).toFixed(g >= 10000 ? 0 : 1)} kg` : `${g < 20 ? g.toFixed(1).replace(/\.0$/, '') : Math.round(g)} g`);
 export const genus = (s) => s.sci.split(' ')[0];
+/** iNaturalist names hybrids 'Genus a × b' (or 'Genus a × Other b'). */
+export const isHybrid = (s) => s.sci.includes('×');
 
 /** `<img>` markup; adds crossorigin only for hosts that support it. */
 export function imgTag(url, attrs = 'alt="" loading="lazy"') {

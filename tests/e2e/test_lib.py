@@ -106,3 +106,8 @@ def test_nearest_benchmarks(lib):
     assert ids(20, 2) == [0, 1, 3, 4]       # excludes the species itself; ties count as "below"
     assert ids(5, None) == [0, 1]           # nothing smaller
     assert ids(100, None, 1, 1) == [5]
+
+
+def test_is_hybrid(lib):
+    assert lib("L.isHybrid", {"sci": "Anas superciliosa × platyrhynchos"}) is True
+    assert lib("L.isHybrid", {"sci": "Anas superciliosa"}) is False

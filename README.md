@@ -48,7 +48,8 @@ CI runs the suite on every push and pull request; deploys only happen if it pass
 ## Deploy (GitHub Pages)
 
 Pushing to `main` tests and then deploys `app/` to GitHub Pages via `.github/workflows/pages.yml`.
-After changing app files, bump `VERSION` in `app/sw.js` so installed copies pick up the update.
+The deploy stamps `VERSION` in `app/sw.js` with the commit hash (`tools/stamp_version.py`), so installed
+copies pick up each release automatically. There's no manual version bump.
 
 ## Rebuilding the data
 
