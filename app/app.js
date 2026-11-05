@@ -1,12 +1,16 @@
 // BirdID Shapes - size ladders, silhouettes, real-world photos and confusion-pair comparisons.
 // Vanilla JS, no build step. Data: data/species.json + data/groups.json (built by tools/build_data.py),
-// live photos from the iNaturalist API.
+// live photos from the iNaturalist API. Pure helpers live in lib.js.
+
+import {
+  WINGSPAN_FACTOR, esc, photoSize, fmtLen, fmtMass, genus, imgTag, setImgSrc,
+  indexSpecies, search as searchIn, silDims, nearestBenchmarks as nearestIn,
+} from './lib.js';
 
 const INAT = 'https://api.inaturalist.org/v1';
 const PLACE_AU = 6744;
 const COLORS = ['var(--c0)', 'var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)'];
 const MAX_COMPARE = 5;
-const WINGSPAN_FACTOR = 2.2; // flight-pose silhouettes: longest side ~ wingspan ~ 2.2 x body length
 const LADDER_H = 170;        // px height of the tallest silhouette
 
 const FILTERS = [
@@ -26,13 +30,6 @@ let SPECIES = [], BYID = new Map(), GROUPS = [], BENCH = [];
 const view = document.getElementById('view');
 
 // ---------- utils ----------
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const photoSize = (url, size) => (url || '').replace(/\/(square|small|medium|thumb)\./, `/${size}.`);
-const fmtLen = (s) => (s.len ? `${s.lenMin && s.lenMax && s.lenMin !== s.lenMax ? `${s.lenMin}–${s.lenMax}` : s.len} cm` : '—');
-const fmtMass = (g) => (!g ? '—' : g >= 1000 ? `${(g / 1000).toFixed(g >= 10000 ? 0 : 1)} kg` : `${g < 20 ? g.toFixed(1).replace(/\.0$/, '') : Math.round(g)} g`);
-const genus = (s) => s.sci.split(' ')[0];
-
 async function getJSON(url, tries = 3) {
   for (let i = 0; i < tries; i++) {
     const r = await fetch(url);
@@ -44,26 +41,11 @@ async function getJSON(url, tries = 3) {
 }
 
 // ---------- search ----------
-function search(q, limit = 40) {
-  q = norm(q);
-  if (!q) return [];
-  const words = q.split(' ');
-  const out = [];
-  for (const s of SPECIES) {
-    let sc = 0;
-    if (s._c.startsWith(q)) sc = 5;
-    else if (s._c.split(' ').some((w) => w.startsWith(q))) sc = 4;
-    else if (words.every((w) => s._c.includes(w))) sc = 3;
-    else if (s._s.includes(q)) sc = 2;
-    else if (words.every((w) => s._f.includes(w))) sc = 1;
-    if (sc) out.push([sc, s]);
-  }
-  return out.sort((a, b) => b[0] - a[0] || b[1].obs - a[1].obs).slice(0, limit).map((x) => x[1]);
-}
+const search = (q, limit) => searchIn(SPECIES, q, limit);
 const popular = (n = 25) => [...SPECIES].sort((a, b) => b.obs - a.obs).slice(0, n);
 
 function resultItem(s, tag = 'a') {
-  const img = s.photo ? `<img src="${esc(s.photo)}" alt="" loading="lazy">` : '<span class="thumb"></span>';
+  const img = s.photo ? imgTag(s.photo) : '<span class="thumb"></span>';
   const inner = `${img}<span class="names"><b>${esc(s.common)}</b><i>${esc(s.sci)}${s.len ? ` · ${s.len} cm` : ''}</i></span>`;
   return tag === 'a'
     ? `<li><a href="#/s/${s.id}">${inner}</a></li>`
@@ -71,14 +53,6 @@ function resultItem(s, tag = 'a') {
 }
 
 // ---------- silhouettes & size ladder ----------
-function silDims(s, k) {
-  const flight = s.sil?.pose === 'flight';
-  const longest = (flight ? s.len * WINGSPAN_FACTOR : s.len) * k;
-  if (!s.sil) return { w: longest * 0.8, h: longest * 0.8, flight };
-  const { w, h } = s.sil;
-  return w >= h ? { w: longest, h: longest * h / w, flight } : { w: longest * w / h, h: longest, flight };
-}
-
 function silHTML(s, w, h, color, ref) {
   if (!s.sil) return `<div class="sil missing" style="width:${w}px;height:${h}px" title="No silhouette"></div>`;
   const u = `url('${s.sil.url}')`;
@@ -128,12 +102,7 @@ function silCredit(s) {
   return `<a href="https://www.phylopic.org/images/${esc(sil.uuid)}" target="_blank" rel="noopener">${esc(sil.name)}</a>${lvl} by ${esc(sil.by)}, <a href="${esc(sil.licUrl)}" target="_blank" rel="noopener">${esc(sil.lic)}</a>`;
 }
 
-function nearestBenchmarks(len, excludeId, below = 2, above = 2) {
-  const b = BENCH.map((id) => BYID.get(id)).filter((s) => s && s.id !== excludeId).sort((a, c) => a.len - c.len);
-  const lo = b.filter((s) => s.len <= len).slice(-below);
-  const hi = b.filter((s) => s.len > len).slice(0, above);
-  return [...lo, ...hi];
-}
+const nearestBenchmarks = (len, excludeId, below, above) => nearestIn(BENCH.map((id) => BYID.get(id)), len, excludeId, below, above);
 
 // ---------- iNaturalist gallery ----------
 class Gallery {
@@ -196,7 +165,7 @@ function gridGallery(container, gallery, label) {
     for (; shown < g.items.length; shown++) {
       const it = g.items[shown];
       const b = document.createElement('button');
-      b.innerHTML = `<img src="${esc(it.thumb)}" alt="" loading="lazy">`;
+      b.innerHTML = imgTag(it.thumb);
       const idx = shown;
       b.onclick = () => Lightbox.open(g, idx, label);
       grid.appendChild(b);
@@ -223,7 +192,7 @@ function stripGallery(container, gallery, label) {
     for (; shown < g.items.length; shown++) {
       const it = g.items[shown];
       const b = document.createElement('button');
-      b.innerHTML = `<img src="${esc(it.thumb)}" alt="" loading="lazy">`;
+      b.innerHTML = imgTag(it.thumb);
       const idx = shown;
       b.onclick = () => Lightbox.open(g, idx, label);
       strip.appendChild(b);
@@ -249,8 +218,8 @@ const Lightbox = (() => {
   const render = () => {
     const it = g.items[i];
     if (!it) return;
-    img.src = it.large;
-    const nxt = g.items[i + 1]; if (nxt) new Image().src = nxt.large;
+    setImgSrc(img, it.large);
+    const nxt = g.items[i + 1]; if (nxt) setImgSrc(new Image(), nxt.large);
     cap.innerHTML = `<b>${esc(label)}</b> · ${esc(it.date || '')} · ${esc(it.place || '')}
       ${it.tags.length ? `<br>Tagged: ${esc(it.tags.join(', '))}` : ''}
       <br><span style="opacity:.75">${esc(it.attr)}</span> ·
@@ -346,7 +315,7 @@ function viewHome() {
         <div class="group-list">
           ${GROUPS.map((g, i) => [g, i]).filter(([g]) => g.cat === c).map(([g, i]) => `
             <a class="group-card" href="#/c/${g.ids.join(',')}?g=${i}">
-              <div class="stack">${g.ids.slice(0, 3).map((id) => `<img src="${esc(BYID.get(id)?.photo || '')}" alt="" loading="lazy">`).join('')}</div>
+              <div class="stack">${g.ids.slice(0, 3).map((id) => imgTag(BYID.get(id)?.photo || '')).join('')}</div>
               <span>${esc(g.title)}</span>
             </a>`).join('')}
         </div>`).join('')}
@@ -383,7 +352,7 @@ function viewSpecies(id) {
     : '<p class="muted small">No body-length data for this species (often vagrants, hybrids or domestic birds).</p>';
   view.innerHTML = `
     <div class="hero">
-      <img src="${esc(photoSize(s.photo, 'medium'))}" alt="">
+      ${imgTag(photoSize(s.photo, 'medium'), 'alt=""')}
       <div>
         <h1>${esc(s.common)}</h1>
         <div class="sci">${esc(s.sci)}</div>
@@ -568,8 +537,7 @@ async function boot() {
     ]);
     SPECIES = species;
     for (const s of SPECIES) {
-      s._c = norm(s.common); s._s = norm(s.sci); s._f = norm(`${s.familyCommon || ''} ${s.family || ''}`);
-      BYID.set(s.id, s);
+      BYID.set(indexSpecies(s).id, s);
     }
     GROUPS = groups.groups; BENCH = groups.benchmarks;
   } catch (e) {
