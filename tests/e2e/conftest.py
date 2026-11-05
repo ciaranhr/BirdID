@@ -4,7 +4,7 @@ Every request that isn't to the local server is answered by FakeNet (iNaturalist
 PhyloPic) or aborted, so the suite never touches the real internet. The fake image hosts mirror the
 real CORS headers: S3 and PhyloPic send Access-Control-Allow-Origin, static.inaturalist.org doesn't.
 """
-import base64, functools, http.server, json, os, threading
+import base64, functools, http.server, json, os, threading, time
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -75,6 +75,8 @@ class FakeNet:
         self.base_url = base_url
         self.total = 45          # observations per taxon; 30 per page
         self.status = 200        # set to e.g. 404 to make the observations API fail
+        self.dead_on_page1 = 0   # mark this many page-1 observations as dead (gallery skips them)
+        self.api_delay = 0       # seconds to hold each observations response
         self.api_calls = []      # parsed query params of every observations request
         self.image_requests = []
         self.blocked = []
@@ -87,7 +89,7 @@ class FakeNet:
             oid = int(q["taxon_id"]) * 1000 + page * 100 + j
             host = "inaturalist-open-data.s3.amazonaws.com" if j % 2 == 0 else "static.inaturalist.org"
             annotations = [{"controlled_attribute_id": 1, "controlled_value_id": 2}]  # adult
-            if page == 1 and j == 3:
+            if page == 1 and (j == 3 or j < self.dead_on_page1):
                 annotations.append({"controlled_attribute_id": 17, "controlled_value_id": 19})  # dead
             if page == 1 and j == 5:
                 annotations.append({"controlled_attribute_id": 22, "controlled_value_id": 25})  # feather
@@ -105,6 +107,8 @@ class FakeNet:
         if url.hostname == "api.inaturalist.org" and url.path == "/v1/observations":
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             self.api_calls.append(q)
+            if self.api_delay:
+                time.sleep(self.api_delay)
             if self.status != 200:
                 return route.fulfill(status=self.status, body="{}", headers={"Access-Control-Allow-Origin": "*"})
             return route.fulfill(status=200, content_type="application/json",

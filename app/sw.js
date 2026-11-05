@@ -1,6 +1,6 @@
 // Service worker: app shell + data precached; silhouettes and photos cached as viewed;
 // iNaturalist API network-first with cache fallback (for patchy reception in the field).
-const VERSION = 'v2';
+const VERSION = 'dev'; // replaced with the commit hash at deploy time (tools/stamp_version.py)
 const SHELL = `shell-${VERSION}`;
 // v2: images now arrive as CORS responses. The v1 cache held opaque entries, which would also be
 // served (and fail) for crossorigin requests to the same URL, so it is dropped on activate.
