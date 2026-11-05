@@ -1,5 +1,14 @@
 # BirdID Shapes
 
+## 📱 Open the app: **https://ciaranhr.github.io/BirdID/**
+
+Open the link on your phone, then add it to your home screen so it works like an app:
+
+- **iPhone (Safari):** Share → *Add to Home Screen*
+- **Android (Chrome):** ⋮ menu → *Install app* / *Add to Home screen*
+
+---
+
 A phone-friendly web app (PWA) that complements Merlin for Australian birds:
 
 - **Size ladder**: each species drawn at true relative scale next to familiar birds (fairy-wren, sparrow, magpie, raven, ibis, eagle…).
