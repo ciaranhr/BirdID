@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>BirdID Shapes</title>
+  <meta name="description" content="Size ladders, silhouettes, real-world photos and confusion-pair comparisons for Australian birds.">
+  <meta name="theme-color" content="#1f3a2e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand" aria-label="Home">
+      <img src="icons/icon-192.png" alt="" width="28" height="28">
+      <span>BirdID <b>Shapes</b></span>
+    </a>
+    <nav>
+      <a href="#/" data-nav="home">Groups</a>
+      <a href="#/c/" data-nav="compare">Compare</a>
+      <a href="#/about" data-nav="about">About</a>
+    </nav>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <!-- species picker overlay -->
+  <div id="picker" class="overlay" hidden>
+    <div class="picker-sheet">
+      <div class="picker-head">
+        <input id="picker-input" type="search" placeholder="Search Australian birds…" autocomplete="off" enterkeyhint="search">
+        <button class="icon-btn" data-close aria-label="Close">✕</button>
+      </div>
+      <ul id="picker-results" class="results"></ul>
+    </div>
+  </div>
+
+  <!-- photo lightbox -->
+  <div id="lightbox" class="lightbox" hidden>
+    <button class="icon-btn lb-close" data-close aria-label="Close">✕</button>
+    <button class="lb-nav lb-prev" aria-label="Previous">‹</button>
+    <button class="lb-nav lb-next" aria-label="Next">›</button>
+    <div class="lb-stage"><img alt=""></div>
+    <div class="lb-caption"></div>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
