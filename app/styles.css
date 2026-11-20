@@ -48,6 +48,10 @@ button { font: inherit; color: inherit; }
   text-decoration: none; padding: .35rem .6rem; border-radius: 999px; font-size: .9rem; opacity: .85;
 }
 .topbar nav a.active { background: rgba(255,255,255,.16); opacity: 1; }
+@media (max-width: 440px) {
+  .brand span { display: none; }               /* room for four nav links on phones */
+  .topbar nav a { padding: .35rem .5rem; }
+}
 
 main { max-width: 760px; margin: 0 auto; padding: .9rem .9rem 3rem; outline: none; }
 
@@ -212,3 +216,33 @@ table.stats td.num { white-space: nowrap; }
 .credit { font-size: .72rem; color: var(--muted); margin-top: .4rem; }
 .credit a { color: inherit; }
 .note { font-size: .78rem; color: var(--muted); background: var(--chip); border-radius: 10px; padding: .5rem .7rem; margin-top: .6rem; }
+
+/* ---------- location ---------- */
+.locbar {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: .55rem .8rem; margin-bottom: .7rem;
+}
+.locbar-main { display: flex; align-items: center; gap: .45rem; text-decoration: none; }
+.locbar-main .change { margin-left: auto; color: var(--accent); font-size: .88rem; font-weight: 600; }
+.locbar-status { margin-top: .15rem; }
+.local-line { margin-top: .35rem; }
+.nearby { color: var(--c3); font-style: normal; font-weight: 600; }
+.loc-gps { flex-wrap: wrap; }
+.loc-gps select { font: inherit; padding: .25rem; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+
+/* ---------- species list ---------- */
+.list-controls { margin: .6rem 0 .2rem; }
+.fam-title { margin: 1.1rem 0 .3rem; font-size: .95rem; }
+.fam-title i { font-weight: 400; color: var(--muted); font-size: .82rem; }
+.splist { list-style: none; margin: 0; padding: 0; }
+.splist a {
+  display: flex; align-items: baseline; gap: .6rem; padding: .4rem .2rem; text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.splist .cn { flex: 0 1 auto; font-weight: 600; }
+.splist .sn { flex: 1 1 auto; color: var(--muted); font-size: .88rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.splist .lc { flex: none; font-size: .78rem; color: var(--c3); font-variant-numeric: tabular-nums; }
+@media (max-width: 440px) {
+  .splist a { flex-wrap: wrap; row-gap: 0; }
+  .splist .sn { flex-basis: 100%; order: 3; white-space: normal; }
+}

@@ -14,6 +14,8 @@ A phone-friendly web app (PWA) that complements Merlin for Australian birds:
 - **Size ladder**: each species drawn at true relative scale next to familiar birds (fairy-wren, sparrow, magpie, raven, ibis, eagle…).
 - **Confusion groups**: 43 curated Australian look-alike sets with true-scale silhouettes, length/weight ratios, field-mark notes and photo rows side by side. You can also compare any 2–5 species.
 - **Real-world photos**: research-grade iNaturalist observations from Australia, filterable by adult/juvenile/male/female, sorted by "best" or "recent" (recent gives more typical, imperfect views).
+- **Species list**: every bird with its common and scientific name, grouped by family or sorted A–Z, searchable by any of them.
+- **Species near you**: set a location (GPS, rounded to ~1 km, or a state/territory) and search, look-alike suggestions and the species list favour birds with research-grade iNaturalist records there. Counts are cached on the phone for a week, so they work offline.
 
 ## Run locally
 

@@ -77,6 +77,9 @@ class FakeNet:
         self.status = 200        # set to e.g. 404 to make the observations API fail
         self.dead_on_page1 = 0   # mark this many page-1 observations as dead (gallery skips them)
         self.api_delay = 0       # seconds to hold each observations response
+        self.local = {}          # taxon id -> count returned by species_counts (the "near me" data)
+        self.counts_status = 200
+        self.counts_calls = []   # parsed query params of every species_counts request
         self.api_calls = []      # parsed query params of every observations request
         self.image_requests = []
         self.blocked = []
@@ -104,6 +107,18 @@ class FakeNet:
         url = urlparse(route.request.url)
         if route.request.url.startswith(self.base_url):
             return route.continue_()
+        if url.hostname == "api.inaturalist.org" and url.path == "/v1/observations/species_counts":
+            q = {k: v[0] for k, v in parse_qs(url.query).items()}
+            self.counts_calls.append(q)
+            if self.counts_status != 200:
+                return route.fulfill(status=self.counts_status, body="{}", headers={"Access-Control-Allow-Origin": "*"})
+            rows = sorted(self.local.items(), key=lambda kv: -kv[1])
+            page, per = int(q.get("page", 1)), int(q.get("per_page", 500))
+            chunk = rows[(page - 1) * per: page * per]
+            body = {"total_results": len(rows), "page": page, "per_page": per,
+                    "results": [{"count": c, "taxon": {"id": int(t)}} for t, c in chunk]}
+            return route.fulfill(status=200, content_type="application/json",
+                                 headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps(body))
         if url.hostname == "api.inaturalist.org" and url.path == "/v1/observations":
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             self.api_calls.append(q)
