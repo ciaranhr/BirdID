@@ -13,7 +13,7 @@ const IMG_MAX = 600, IMG_OPAQUE_MAX = 40, API_MAX = 150;
 const CACHES = [SHELL, IMG, IMG_OPAQUE, API];
 const IMAGE_HOSTS = ['images.phylopic.org', 'inaturalist-open-data.s3.amazonaws.com', 'static.inaturalist.org'];
 const SHELL_FILES = [
-  './', 'index.html', 'styles.css', 'app.js', 'lib.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'app.js', 'lib.js', 'location.js', 'manifest.webmanifest',
   'data/species.json', 'data/groups.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];

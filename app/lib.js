@@ -43,8 +43,15 @@ export function indexSpecies(s) {
   return s;
 }
 
-/** Rank species by match quality, then by number of observations. */
-export function search(species, q, limit = 40) {
+/**
+ * Comparator: species recorded locally first (most local records first), then most observed
+ * Australia-wide. `local` is a Map(taxonId -> local count) or null when no location is set.
+ */
+export const byLocalThenObs = (local) => (a, b) =>
+  (local ? (local.get(b.id) || 0) - (local.get(a.id) || 0) : 0) || b.obs - a.obs;
+
+/** Rank species by match quality, then local records (if a location is set), then observations. */
+export function search(species, q, limit = 40, local = null) {
   q = norm(q);
   if (!q) return [];
   const words = q.split(' ');
@@ -58,7 +65,8 @@ export function search(species, q, limit = 40) {
     else if (words.every((w) => s._f.includes(w))) sc = 1;
     if (sc) out.push([sc, s]);
   }
-  return out.sort((a, b) => b[0] - a[0] || b[1].obs - a[1].obs).slice(0, limit).map((x) => x[1]);
+  const tie = byLocalThenObs(local);
+  return out.sort((a, b) => b[0] - a[0] || tie(a[1], b[1])).slice(0, limit).map((x) => x[1]);
 }
 
 /** Drawn size of a silhouette at k px/cm; flight poses are scaled to approximate wingspan. */
@@ -76,4 +84,34 @@ export function nearestBenchmarks(bench, len, excludeId, below = 2, above = 2) {
   const lo = b.filter((s) => s.len <= len).slice(-below);
   const hi = b.filter((s) => s.len > len).slice(0, above);
   return [...lo, ...hi];
+}
+
+export const LIST_SORTS = [
+  { key: 'family', label: 'Family' },
+  { key: 'common', label: 'Common name' },
+  { key: 'sci', label: 'Scientific name' },
+];
+
+const cmpText = (a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' });
+
+/**
+ * The species list: non-hybrid species matching `q` (common, scientific or family name), optionally
+ * only those recorded locally, as sections [{ title, sub, items }]. Family sort gives one section per
+ * family (by family common name, birds A-Z within it); the other sorts give a single flat section.
+ */
+export function speciesList(species, { q = '', sort = 'family', local = null, nearOnly = false } = {}) {
+  const words = norm(q).split(' ').filter(Boolean);
+  const items = species.filter((s) => !isHybrid(s)
+    && (!nearOnly || !local || local.has(s.id))
+    && words.every((w) => s._c.includes(w) || s._s.includes(w) || s._f.includes(w)));
+  if (sort === 'sci') return [{ title: '', items: items.sort((a, b) => cmpText(a.sci, b.sci)) }];
+  if (sort === 'common') return [{ title: '', items: items.sort((a, b) => cmpText(a.common, b.common)) }];
+  const fams = new Map();
+  for (const s of items) {
+    if (!fams.has(s.family)) fams.set(s.family, { title: s.familyCommon || s.family || 'Other', sub: s.family || '', items: [] });
+    fams.get(s.family).items.push(s);
+  }
+  const out = [...fams.values()].sort((a, b) => cmpText(a.title, b.title));
+  out.forEach((f) => f.items.sort((a, b) => cmpText(a.common, b.common)));
+  return out;
 }

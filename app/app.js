@@ -5,7 +5,12 @@
 import {
   WINGSPAN_FACTOR, esc, photoSize, fmtLen, fmtMass, genus, isHybrid, imgTag, setImgSrc,
   indexSpecies, search as searchIn, silDims, nearestBenchmarks as nearestIn,
+  byLocalThenObs, speciesList, LIST_SORTS,
 } from './lib.js';
+import {
+  REGIONS, RADII, DEFAULT_RADIUS, loadLocation, saveLocation, validLocation, locationLabel,
+  localCounts, currentPosition,
+} from './location.js';
 
 const INAT = 'https://api.inaturalist.org/v1';
 const PLACE_AU = 6744;
@@ -29,6 +34,60 @@ const ANNOT = { 2: 'adult', 8: 'juvenile', 10: 'female', 11: 'male' };
 let SPECIES = [], BYID = new Map(), GROUPS = [], BENCH = [];
 const view = document.getElementById('view');
 
+// ---------- location ("species near me") ----------
+// LOC: the saved location or null; LOCAL: Map(taxonId -> research-grade records there) once loaded.
+let LOC = loadLocation();
+let LOCAL = null;
+const local = { status: LOC ? 'loading' : 'off', stale: false, error: '', req: 0 };
+const localListeners = new Set(); // per-view updaters; cleared on every route change
+
+/** "within 50 km of you" / "in Tasmania" */
+const locIn = (loc) => (loc.kind === 'gps' ? locationLabel(loc) : `in ${loc.name}`);
+
+async function loadLocal() {
+  const req = ++local.req;
+  LOCAL = null;
+  Object.assign(local, { status: LOC ? 'loading' : 'off', stale: false, error: '' });
+  notifyLocal();
+  if (!LOC) return;
+  try {
+    const r = await localCounts(LOC, getJSON);
+    if (req !== local.req) return; // the location changed meanwhile
+    LOCAL = r.counts;
+    Object.assign(local, { status: 'ready', stale: r.stale });
+  } catch (e) {
+    if (req !== local.req) return;
+    Object.assign(local, { status: 'error', error: e.message });
+  }
+  notifyLocal();
+}
+
+function setLocation(loc) {
+  LOC = validLocation(loc);
+  saveLocation(LOC);
+  loadLocal();
+}
+
+function locBarInner() {
+  const label = LOC ? locationLabel(LOC) : 'All of Australia';
+  const status = local.status === 'loading' ? 'Loading local records…'
+    : local.status === 'error' ? `Couldn't load local records (${esc(local.error)}) <button type="button" class="link-btn" data-loc-retry>Retry</button>`
+    : local.status === 'ready' ? `${localListedCount().toLocaleString()} species recorded${local.stale ? ' · saved copy' : ''}`
+    : 'Set a location to see what’s around you';
+  return `<a class="locbar-main" href="#/location"><span class="pin" aria-hidden="true">📍</span>
+      <b>${esc(label.charAt(0).toUpperCase() + label.slice(1))}</b><span class="change">Change</span></a>
+    <div class="muted small locbar-status" role="status">${status}</div>`;
+}
+/** Local species the app can show (iNaturalist also counts hybrids and birds added since the data build). */
+const localListedCount = () => SPECIES.filter((s) => !isHybrid(s) && LOCAL.has(s.id)).length;
+const locBar = () => `<div class="locbar" data-locbar>${locBarInner()}</div>`;
+
+function notifyLocal() {
+  document.querySelectorAll('[data-locbar]').forEach((el) => { el.innerHTML = locBarInner(); });
+  localListeners.forEach((fn) => fn());
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-loc-retry]')) loadLocal(); });
+
 // ---------- utils ----------
 async function getJSON(url, tries = 3) {
   for (let i = 0; i < tries; i++) {
@@ -41,12 +100,13 @@ async function getJSON(url, tries = 3) {
 }
 
 // ---------- search ----------
-const search = (q, limit) => searchIn(SPECIES, q, limit);
-const popular = (n = 25) => [...SPECIES].sort((a, b) => b.obs - a.obs).slice(0, n);
+const search = (q, limit) => searchIn(SPECIES, q, limit, LOCAL);
+const popular = (n = 25) => SPECIES.filter((s) => !isHybrid(s)).sort(byLocalThenObs(LOCAL)).slice(0, n);
 
 function resultItem(s, tag = 'a') {
   const img = s.photo ? imgTag(s.photo) : '<span class="thumb"></span>';
-  const inner = `${img}<span class="names"><b>${esc(s.common)}</b><i>${esc(s.sci)}${s.len ? ` · ${s.len} cm` : ''}</i></span>`;
+  const near = LOCAL?.get(s.id) ? ' · <span class="nearby">nearby</span>' : '';
+  const inner = `${img}<span class="names"><b>${esc(s.common)}</b><i>${esc(s.sci)}${s.len ? ` · ${s.len} cm` : ''}${near}</i></span>`;
   return tag === 'a'
     ? `<li><a href="#/s/${s.id}">${inner}</a></li>`
     : `<li><button type="button" data-id="${s.id}">${inner}</button></li>`;
@@ -319,6 +379,7 @@ function viewHome() {
   setNav('home');
   const cats = [...new Set(GROUPS.map((g) => g.cat))];
   view.innerHTML = `
+    ${locBar()}
     <input class="search" id="q" type="search" placeholder="Search a species, e.g. 'raven' or 'honeyeater'…" autocomplete="off" enterkeyhint="search">
     <ul class="results" id="qres"></ul>
     <div id="groups">
@@ -334,11 +395,13 @@ function viewHome() {
         </div>`).join('')}
     </div>`;
   const q = document.getElementById('q'), res = document.getElementById('qres'), groups = document.getElementById('groups');
-  q.addEventListener('input', () => {
+  const draw = () => {
     const r = search(q.value);
     res.innerHTML = r.map((s) => resultItem(s)).join('') || (q.value.trim() ? '<li class="empty">No matches</li>' : '');
     groups.hidden = !!q.value.trim();
-  });
+  };
+  q.addEventListener('input', draw);
+  localListeners.add(() => { if (q.value.trim()) draw(); });
 }
 
 function similarSpecies(s) {
@@ -347,10 +410,11 @@ function similarSpecies(s) {
   const push = (x, why) => { if (x && !seen.has(x.id)) { seen.add(x.id); out.push([x, why]); } };
   const g = genus(s);
   const candidates = SPECIES.filter((x) => !isHybrid(x));
-  candidates.filter((x) => genus(x) === g && x.obs >= 5).sort((a, b) => b.obs - a.obs).slice(0, 5).forEach((x) => push(x, 'same genus'));
+  const rank = byLocalThenObs(LOCAL);
+  candidates.filter((x) => genus(x) === g && x.obs >= 5).sort(rank).slice(0, 5).forEach((x) => push(x, 'same genus'));
   if (s.len) {
     candidates.filter((x) => x.family === s.family && x.len && Math.abs(x.len - s.len) / s.len <= 0.25 && x.obs >= 20)
-      .sort((a, b) => b.obs - a.obs).slice(0, 5).forEach((x) => push(x, 'same family, similar size'));
+      .sort(rank).slice(0, 5).forEach((x) => push(x, 'same family, similar size'));
   }
   return out.slice(0, 8);
 }
@@ -360,7 +424,6 @@ function viewSpecies(id) {
   const s = BYID.get(id);
   if (!s) { view.innerHTML = '<p class="empty">Species not found.</p>'; return; }
   const groups = GROUPS.map((g, i) => [g, i]).filter(([g]) => g.ids.includes(s.id));
-  const sim = similarSpecies(s);
   const ladder = s.len
     ? ladderHTML([{ s, color: 'var(--c0)' }, ...nearestBenchmarks(s.len, s.id).map((b) => ({ s: b, ref: true }))])
     : '<p class="muted small">No body-length data for this species (often vagrants, hybrids or domestic birds).</p>';
@@ -372,20 +435,33 @@ function viewSpecies(id) {
         <div class="sci">${esc(s.sci)}</div>
         <div class="muted small">${esc(s.familyCommon || s.family || '')}</div>
         <div class="stat-line"><span>Length <b>${fmtLen(s)}</b></span><span>Weight <b>${fmtMass(s.mass)}</b></span></div>
+        <div class="local-line small" id="local-line"></div>
       </div>
     </div>
     <section class="card"><h2>Size ladder</h2>${ladder}</section>
-    ${groups.length || sim.length ? `<section class="card"><h2>Compare with…</h2>
-      <div class="chips">
-        ${groups.map(([g, i]) => `<a class="chip" href="#/c/${g.ids.join(',')}?g=${i}">⚖︎ ${esc(g.title)}</a>`).join('')}
-        ${sim.map(([x]) => `<a class="chip" href="#/c/${s.id},${x.id}">vs ${esc(x.common)}</a>`).join('')}
-        <button class="chip" id="cmp-any">+ any species…</button>
-      </div></section>` : `<section class="card"><button class="btn ghost" id="cmp-any">+ Compare with any species…</button></section>`}
+    <div id="cmp-card"></div>
     <section class="card"><h2>Real-world photos</h2>
       <p class="muted small" style="margin:-.3rem 0 .6rem">Research-grade iNaturalist observations from Australia. Try “Recent” for typical distant, backlit and in-flight views.</p>
       <div id="gfilters"></div><div id="gallery"></div>
     </section>`;
-  view.querySelector('#cmp-any').onclick = () => Picker.open((o) => (location.hash = `#/c/${s.id},${o}`), [s.id]);
+  const drawLocal = () => {
+    const n = LOCAL?.get(s.id) || 0;
+    view.querySelector('#local-line').innerHTML = !LOC ? ''
+      : local.status === 'loading' ? '<span class="muted">Checking local records…</span>'
+      : local.status !== 'ready' ? ''
+      : n ? `📍 <b>${n.toLocaleString()}</b> research-grade record${n === 1 ? '' : 's'} ${esc(locIn(LOC))}`
+      : `📍 <span class="muted">No research-grade records ${esc(locIn(LOC))}</span>`;
+    const sim = similarSpecies(s);
+    view.querySelector('#cmp-card').innerHTML = groups.length || sim.length ? `<section class="card"><h2>Compare with…</h2>
+      <div class="chips">
+        ${groups.map(([g, i]) => `<a class="chip" href="#/c/${g.ids.join(',')}?g=${i}">⚖︎ ${esc(g.title)}</a>`).join('')}
+        ${sim.map(([x]) => `<a class="chip" href="#/c/${s.id},${x.id}">vs ${esc(x.common)}${LOCAL?.get(x.id) ? ' 📍' : ''}</a>`).join('')}
+        <button class="chip" id="cmp-any">+ any species…</button>
+      </div></section>` : '<section class="card"><button class="btn ghost" id="cmp-any">+ Compare with any species…</button></section>';
+    view.querySelector('#cmp-any').onclick = () => Picker.open((o) => (location.hash = `#/c/${s.id},${o}`), [s.id]);
+  };
+  drawLocal();
+  localListeners.add(drawLocal);
 
   const state = { filter: 'all', order: 'votes' };
   const mount = () => {
@@ -497,6 +573,95 @@ function wireCompareChips(sp, nav) {
   if (add) add.onclick = () => Picker.open((id) => nav([...sp, BYID.get(id)], false), sp.map((s) => s.id));
 }
 
+// ---------- species list ----------
+const listState = { q: '', sort: 'family', nearOnly: false, scroll: 0 };
+
+function viewList() {
+  setNav('list');
+  const total = SPECIES.filter((s) => !isHybrid(s)).length;
+  view.innerHTML = `
+    ${locBar()}
+    <input class="search" id="lq" type="search" placeholder="Filter by common, scientific or family name…" autocomplete="off" enterkeyhint="search" value="${esc(listState.q)}">
+    <div class="chips list-controls">
+      ${LIST_SORTS.map((o) => `<button class="chip" data-sort="${o.key}" aria-pressed="${o.key === listState.sort}">${o.label}</button>`).join('')}
+      <button class="chip" id="near-only" aria-pressed="${listState.nearOnly}">📍 Recorded nearby</button>
+    </div>
+    <p class="muted small" id="lcount" role="status"></p>
+    <div id="splist"></div>`;
+  const nearBtn = view.querySelector('#near-only');
+  const draw = () => {
+    nearBtn.hidden = !LOCAL;
+    const near = listState.nearOnly && !!LOCAL;
+    const sections = speciesList(SPECIES, { ...listState, nearOnly: near, local: LOCAL });
+    const n = sections.reduce((acc, sec) => acc + sec.items.length, 0);
+    view.querySelector('#lcount').textContent = `${n.toLocaleString()} of ${total.toLocaleString()} species${near ? ` recorded ${locIn(LOC)}` : ''}`;
+    const row = (s) => {
+      const c = LOCAL?.get(s.id);
+      return `<li><a href="#/s/${s.id}"><span class="cn">${esc(s.common)}</span><i class="sn">${esc(s.sci)}</i>${
+        c ? `<span class="lc" title="Research-grade records ${esc(locIn(LOC))}">📍 ${c.toLocaleString()}</span>` : ''}</a></li>`;
+    };
+    view.querySelector('#splist').innerHTML = sections.map((sec) => `
+      ${sec.title ? `<h3 class="fam-title">${esc(sec.title)} <i>${esc(sec.sub)}</i></h3>` : ''}
+      <ul class="splist">${sec.items.map(row).join('')}</ul>`).join('') || '<p class="empty">No matches</p>';
+  };
+  view.querySelector('#lq').addEventListener('input', (e) => { listState.q = e.target.value; draw(); });
+  view.querySelector('.list-controls').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.sort) listState.sort = b.dataset.sort;
+    else listState.nearOnly = !listState.nearOnly;
+    view.querySelectorAll('[data-sort]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.sort === listState.sort));
+    nearBtn.setAttribute('aria-pressed', listState.nearOnly);
+    draw();
+  });
+  draw();
+  localListeners.add(draw);
+  return listState.scroll; // restore the position when coming back from a species page
+}
+
+// ---------- location page ----------
+let cameFromApp = false; // opened from another page of the app (so Back returns there)
+
+function viewLocation() {
+  setNav('');
+  const radius = LOC?.kind === 'gps' ? LOC.radius : DEFAULT_RADIUS;
+  view.innerHTML = `
+    <section class="card"><h2>Your location</h2>
+      <p class="muted small">Used to show which birds have research-grade iNaturalist records near you. Your position is rounded
+        to about 1&nbsp;km, kept on this device, and sent only to iNaturalist.</p>
+      <p>Now: <b id="loc-now">${esc(LOC ? locationLabel(LOC) : 'All of Australia')}</b></p>
+      <div class="row loc-gps">
+        <button class="btn" id="use-gps">📍 Use my current location</button>
+        <label class="small">within <select id="radius">${RADII.map((r) => `<option value="${r}"${r === radius ? ' selected' : ''}>${r} km</option>`).join('')}</select></label>
+      </div>
+      <p class="small" id="gps-msg" role="status"></p>
+    </section>
+    <section class="card"><h2>Or pick a state or territory</h2>
+      <div class="chips">${REGIONS.map((r) => `<button class="chip" data-region="${r.id}" aria-pressed="${LOC?.kind === 'region' && LOC.id === r.id}">${esc(r.name)}</button>`).join('')}</div>
+    </section>
+    <section class="card"><button class="btn ghost" id="loc-clear">Use all of Australia (no location)</button></section>`;
+  const done = (loc) => {
+    setLocation(loc);
+    if (cameFromApp) history.back(); else location.replace('#/');
+  };
+  const msg = view.querySelector('#gps-msg');
+  view.querySelector('#use-gps').onclick = async (e) => {
+    e.target.disabled = true;
+    msg.textContent = 'Finding you…';
+    try {
+      const pos = await currentPosition();
+      done({ kind: 'gps', ...pos, radius: +view.querySelector('#radius').value });
+    } catch (err) {
+      msg.textContent = `${err.message} You can pick a state or territory instead.`;
+      e.target.disabled = false;
+    }
+  };
+  view.querySelectorAll('[data-region]').forEach((b) => {
+    b.onclick = () => done({ kind: 'region', id: +b.dataset.region });
+  });
+  view.querySelector('#loc-clear').onclick = () => done(null);
+}
+
 function viewAbout() {
   setNav('about');
   view.innerHTML = `
@@ -506,6 +671,7 @@ function viewAbout() {
         <li><b>Size ladder</b> - every species drawn to true relative scale beside familiar birds (fairy-wren, sparrow, magpie, raven…).</li>
         <li><b>Confusion groups</b> - curated Australian look-alikes with field-mark notes and synced photo rows.</li>
         <li><b>Real-world photos</b> - research-grade iNaturalist observations from Australia; filter by adult/juvenile/male/female. “Recent” order gives typical, unpolished views.</li>
+        <li><b>Species near you</b> - set a location (GPS or a state) and search, suggestions and the species list favour birds actually recorded there.</li>
       </ul>
     </section>
     <section class="card"><h2>Install on your phone</h2>
@@ -530,19 +696,28 @@ function viewAbout() {
 }
 
 // ---------- router ----------
+let current = null; // the view being shown, before this route() call
+
 function route() {
   cleanup.forEach((f) => f()); cleanup = [];
+  localListeners.clear();
   const [path, qs] = location.hash.replace(/^#/, '').split('?');
   const parts = path.split('/').filter(Boolean);
   const params = new URLSearchParams(qs || '');
+  if (current === 'list') listState.scroll = window.scrollY;
+  cameFromApp = parts[0] === 'location' && current !== null;
+  current = parts[0] || '';
+  let y = 0;
   if (parts[0] === 's') viewSpecies(+parts[1]);
   else if (parts[0] === 'c') {
     const ids = [...new Set((parts[1] || '').split(',').filter(Boolean).map(Number))];
     viewCompare(ids, params.has('g') ? +params.get('g') : null);
   }
+  else if (parts[0] === 'list') y = viewList();
+  else if (parts[0] === 'location') viewLocation();
   else if (parts[0] === 'about') viewAbout();
   else viewHome();
-  window.scrollTo(0, 0);
+  window.scrollTo(0, y);
 }
 
 async function boot() {
@@ -563,6 +738,7 @@ async function boot() {
   }
   window.addEventListener('hashchange', route);
   route();
+  loadLocal();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
