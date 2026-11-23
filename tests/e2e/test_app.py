@@ -302,6 +302,7 @@ def test_compare_ratios(app, sp):
 def test_reference_birds_toggle(app, sp):
     a, b = sp("Australian Magpie"), sp("Magpie-lark")
     app.goto(f"/#/c/{a['id']},{b['id']}")
+    expect(app.locator("#ladder .rung").first).to_be_visible()  # wait for the data to load
     n = app.locator("#ladder .rung").count()
     assert n > 2
     app.click("#refs")
