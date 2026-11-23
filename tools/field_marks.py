@@ -1,8 +1,14 @@
 """Structured field marks for the dichotomous ID key (built into app/data/marks.json).
 
-DRAFT: written from general knowledge and the group tips in confusion_groups.py, NOT yet checked
-against a field guide. When you have checked a species against Pizzey & Knight / Morcombe /
-Menkhorst, add its name to CHECKED; the app flags keys that still include unchecked species.
+Status: drafted from general knowledge and the group tips, then (2026-11-23) checked species by
+species against the Description / Identification / Voice sections of their English Wikipedia
+articles, which mostly cite HANZAB and the Australian field guides. Errors found that way were
+fixed. NOT checked against a printed field guide.
+
+CHECKED lists species whose marks were all supported by that source. Species left out have at
+least one mark the source didn't cover (see NOT_CONFIRMED); the app shows a "draft" note under any
+key that includes them. Verify those against Pizzey & Knight / Morcombe / Menkhorst and move them
+into CHECKED.
 
 How the key uses this
 - Each species maps trait -> short value. The app compares values as text (case-insensitive), so
@@ -57,21 +63,21 @@ MARKS = {
     "Forest Raven": {
         "throat": "short hackles",
         "billShape": "very heavy",
-        "tail": "short",
-        "call": "very deep, slow 'korr-korr-korr'",
+        "tail": "short (wingtips almost reach its tip)",
+        "call": "deep, husky 'korr-korr-korr'",
         "range": "Tasmania and far south coast",
         "head": "grey feather bases (ravens)",
     },
     "Torresian Crow": {
         "throat": "short hackles",
         "behaviour": "shuffles and re-folds its wings after landing",
-        "call": "fast staccato 'uk-uk-uk-uk'",
-        "range": "northern and eastern Australia",
+        "call": "nasal, clattering 'uk-uk-uk-uk'",
+        "range": "northern Australia",
         "head": "white feather bases (crows)",
     },
     "Little Crow": {
         "throat": "short hackles",
-        "call": "flat nasal 'nark-nark-nark'",
+        "call": "harsh 'hark-hark-hark'",
         "range": "inland and western Australia",
         "head": "white feather bases (crows)",
     },
@@ -100,7 +106,7 @@ MARKS = {
         "behaviour": "walks with a head-bob",
         "plumages": {
             "male": {"head": "black, white eyebrow", "throat": "black"},
-            "female": {"head": "black, white forehead", "throat": "white"},
+            "female": {"head": "black, no white eyebrow", "throat": "white"},
         },
     },
 
@@ -137,7 +143,7 @@ MARKS = {
         },
     },
     "White-bellied Cuckooshrike|White-bellied Cuckoo-shrike": {
-        "face": "black mask from bill to behind eye",
+        "face": "black only from bill to eye, not beyond",
         "throat": "grey",
         "behaviour": "shuffles wings on landing",
     },
@@ -145,7 +151,7 @@ MARKS = {
     # ---------- Miners, myna ----------
     "Common Myna": {
         "head": "all black",
-        "face": "yellow bare skin around eye",
+        "face": "yellow bare skin behind the eye",
         "breast": "chocolate brown",
         "flight": "large white wing patches",
     },
@@ -155,7 +161,7 @@ MARKS = {
         "breast": "grey, scalloped",
         "throat": "grey",
         "rump": "grey",
-        "flight": "no white wing patches",
+        "flight": "olive-yellow wing panel, white tail tip",
     },
     "Yellow-throated Miner": {
         "head": "grey crown",
@@ -243,7 +249,7 @@ MARKS = {
     },
     "Australian Hobby": {
         "head": "dark cap, pale forehead and half-collar",
-        "breast": "rufous, streaked",
+        "breast": "rufous or blue-grey, streaked darker",
         "shape": "slim",
     },
     "Brown Falcon": {
@@ -280,7 +286,7 @@ MARKS = {
     "Barking Owl": {
         "eye": "big, bright yellow",
         "billShape": "small, hooked",
-        "breast": "boldly streaked",
+        "breast": "vertically streaked",
         "call": "dog-like 'wook-wook'",
     },
     "Tawny Frogmouth": {
@@ -323,21 +329,21 @@ MARKS = {
         "bill": "red",
     },
     "Musk Lorikeet": {
-        "head": "green, red forehead and ear stripe",
+        "head": "red forehead and ear band, blue crown",
         "breast": "green",
         "bill": "black, tipped red",
     },
 
     # ---------- Egrets ----------
     "Great Egret|Eastern Great Egret": {
-        "bill": "yellow (black when breeding)",
-        "face": "gape line extends behind the eye",
+        "bill": "yellow",
+        "face": "gape line extends well beyond the eye",
         "shape": "very long, kinked neck",
         "legs": "dark",
     },
     "Plumed Egret|Intermediate Egret": {
-        "bill": "yellow (black when breeding)",
-        "face": "gape line ends below the eye",
+        "bill": "yellow",
+        "face": "gape line ends just behind the eye",
         "shape": "medium neck",
         "legs": "dark",
     },
@@ -347,7 +353,8 @@ MARKS = {
         "legs": "black, yellow feet",
     },
     "Eastern Cattle Egret|Cattle Egret": {
-        "bill": "yellow, short",
+        "bill": "yellow",
+        "billShape": "short, stout",
         "shape": "small, stocky, 'jowly' chin",
         "behaviour": "often with livestock",
     },
@@ -379,15 +386,17 @@ MARKS = {
 
     # ---------- Grebes ----------
     "Australasian Grebe": {
+        "eye": "yellow",
         "plumages": {
-            "breeding": {"head": "black, chestnut neck stripe", "face": "pale yellow spot at base of bill"},
-            "non-breeding": {"head": "dark cap to below the eye", "face": "pale yellow spot at base of bill"},
+            "breeding": {"head": "glossy black, chestnut stripe behind eye", "face": "pale yellow spot at gape"},
+            "non-breeding": {"head": "dark crown, grey-white throat", "face": "whitish spot at gape"},
         },
     },
     "Hoary-headed Grebe": {
+        "eye": "dark brown",
         "plumages": {
-            "breeding": {"head": "black with silvery-white streaks", "face": "no yellow spot"},
-            "non-breeding": {"head": "dark cap down to the eye, pale face", "face": "no yellow spot"},
+            "breeding": {"head": "black with silvery-white streaks", "face": "no pale spot at gape"},
+            "non-breeding": {"head": "dark crown, broad black bar down nape", "face": "no pale spot at gape"},
         },
     },
 
@@ -406,7 +415,7 @@ MARKS = {
     },
     "Grey Teal": {
         "throat": "pale, almost white",
-        "face": "plain grey-brown",
+        "face": "pale, dark crown",
     },
     "Chestnut Teal": {
         "plumages": {
@@ -444,11 +453,12 @@ MARKS = {
     "Straw-necked Ibis": {
         "head": "black, naked",
         "upper": "dark, iridescent",
-        "breast": "white, straw-like plumes on breast",
+        "breast": "white",
+        "throat": "straw-like plumes on neck",
     },
     "Glossy Ibis": {
         "head": "dark, feathered",
-        "upper": "dark, glossy",
+        "upper": "dark, iridescent",
         "breast": "dark chestnut-brown",
     },
     "Royal Spoonbill": {"bill": "black", "legs": "black"},
@@ -483,7 +493,7 @@ MARKS = {
     },
     "Pectoral Sandpiper": {
         "billShape": "medium, straight",
-        "head": "duller brown cap",
+        "head": "browner cap, weaker eyebrow",
         "breast": "streaking ends in a sharp line against white belly",
     },
     "Masked Lapwing": {
@@ -528,12 +538,13 @@ MARKS = {
     },
     "Wedge-tailed Shearwater": {
         "bill": "dark",
+        "legs": "pink",
         "tail": "long, wedge-shaped",
         "flight": "buoyant, floppy",
     },
     "Flesh-footed Shearwater": {
-        "bill": "pink, dark tip",
-        "legs": "pink feet",
+        "bill": "pale pink, black tip",
+        "legs": "pink",
         "shape": "large, heavy",
     },
 
@@ -541,17 +552,18 @@ MARKS = {
     "Welcome Swallow": {
         "tail": "long forked streamers",
         "rump": "dark",
-        "head": "rufous forehead and throat",
+        "head": "blue-black cap, rufous forehead",
+        "throat": "rufous",
     },
     "Tree Martin": {
-        "tail": "square",
-        "rump": "dull white",
-        "head": "dark cap",
+        "tail": "shallowly forked",
+        "rump": "whitish",
+        "head": "blue-black cap, rufous forehead",
     },
     "Fairy Martin": {
         "tail": "square",
-        "rump": "bright white",
-        "head": "rufous head",
+        "rump": "whitish",
+        "head": "rufous crown and nape",
     },
     "White-throated Needletail": {
         "tail": "square",
@@ -576,22 +588,24 @@ MARKS = {
     },
     "Brown Thornbill": {
         "eye": "red",
-        "head": "rufous-scalloped forehead",
-        "throat": "streaked",
-        "upper": "warm olive-brown",
+        "head": "rufous-speckled forehead",
+        "throat": "grey, streaked black",
+        "rump": "tawny-rufous",
+        "upper": "warm brown",
         "behaviour": "tail usually held level; forages low in shrubs",
         "range": "east and south-east coast, Tasmania",
     },
     "Inland Thornbill": {
-        "rump": "rufous",
-        "upper": "grey-brown",
+        "head": "white-speckled forehead",
+        "rump": "tawny-rufous",
+        "upper": "greyer brown",
         "behaviour": "often cocks its tail",
-        "range": "drier inland and west",
+        "range": "drier country; forests in south-west WA",
     },
     "Striated Thornbill": {
-        "head": "rufous crown, finely streaked white",
-        "breast": "heavily streaked",
-        "upper": "olive-green",
+        "head": "orange-brown crown, streaked cream",
+        "breast": "cream, heavily streaked black",
+        "upper": "yellow-olive",
         "behaviour": "usually high in eucalypts",
         "range": "south-east",
     },
@@ -600,22 +614,22 @@ MARKS = {
     "Superb Fairywren|Superb Fairy-wren": {
         "range": "south-east, incl. Tasmania",
         "plumages": {
-            "male": {"head": "pale blue crown and cheek", "throat": "black", "breast": "greyish-white"},
-            "female": {"face": "orange-brown around eye and bill", "tail": "brownish", "breast": "pale buff"},
+            "male": {"head": "bright blue crown, ear patch and back; black mask", "throat": "black or dark blue", "breast": "greyish-white"},
+            "female": {"face": "rufous-orange around eye and bill", "tail": "brownish", "breast": "pale buff"},
         },
     },
     "Variegated Fairywren|Variegated Fairy-wren": {
-        "range": "widespread except far south-east",
+        "range": "eastern Australia (since the 2018 split)",
         "plumages": {
-            "male": {"head": "blue crown and cheek, chestnut shoulders", "throat": "black", "breast": "white"},
-            "female": {"face": "chestnut patch in front of eye", "tail": "bluish", "breast": "pale buff"},
+            "male": {"head": "azure crown and ear patch, chestnut shoulders", "throat": "black", "breast": "white"},
+            "female": {"face": "chestnut patch in front of eye", "tail": "blue", "breast": "pale buff"},
         },
     },
     "Splendid Fairywren|Splendid Fairy-wren": {
         "range": "inland and west",
         "plumages": {
             "male": {"head": "all bright blue", "throat": "blue", "breast": "blue with black band"},
-            "female": {"face": "brownish-orange around eye", "tail": "blue", "breast": "pale buff"},
+            "female": {"face": "rufous-orange around eye and bill", "tail": "blue", "breast": "pale buff"},
         },
     },
 
@@ -625,21 +639,47 @@ MARKS = {
         "breast": "pinkish-grey",
     },
     "Laughing Dove": {
-        "throat": "speckled bib across upper breast",
+        "throat": "chequered rufous-and-black patch on upper breast",
         "breast": "pinkish",
         "wing": "blue-grey patch",
     },
     "Fan-tailed Cuckoo": {
-        "eye": "yellow eye-ring",
-        "breast": "rufous-buff",
+        "eye": "dark, yellow-gold eye-ring",
+        "breast": "rufous",
         "tail": "notched, white-barred edges",
     },
     "Pallid Cuckoo": {
-        "eye": "dark stripe through the eye",
+        "eye": "dark, yellow-gold eye-ring",
+        "face": "dark mark from eye down the neck",
         "breast": "pale grey",
         "head": "white spot on nape",
+        "tail": "white-toothed edges",
     },
 }
 
-# Species whose marks have been checked against a field guide (by the same names as MARKS).
-CHECKED = set()
+# Marks the 2026-11-23 check couldn't confirm from the source text (species -> what's unconfirmed).
+NOT_CONFIRMED = {
+    "Brown Falcon": "double tear-drop cheek mark; hovering and gliding behaviour",
+    "Nankeen Kestrel|Australian Kestrel": "'thin single tear-drop' wording",
+    "Swamp Harrier": "buff, streaked underparts",
+    "Little Eagle": "pale M-bar on underwing",
+    "Black Kite": "underwing pattern",
+    "Whistling Kite": "pale M-pattern on underwing; rounded tail",
+    "Brown Goshawk": "heavy brow; rounded tail tip; thick legs",
+    "White-throated Needletail": "white undertail horseshoe; square tail (article text cut short)",
+    "Short-tailed Shearwater": "all marks (article has no description)",
+    "Superb Fairywren|Superb Fairy-wren": "female face and tail",
+    "Variegated Fairywren|Variegated Fairy-wren": "female face and tail",
+    "Splendid Fairywren|Splendid Fairy-wren": "female face and tail",
+    "Restless Flycatcher": "hovering with a grinding call",
+    "Little Wattlebird": "rufous wing patch; silver streaks",
+    "Yellow-throated Miner": "grey crown",
+    "Black-tailed Godwit": "bill shape; tail and rump pattern",
+    "Kelp Gull": "bill, tail and leg details (article text cut short)",
+    "Pacific Gull": "black tail band; red on both mandibles",
+    "Musk Lorikeet": "ear band",
+    "Little Raven": "wing-flicking (article says only 'sometimes')",
+}
+
+# Species whose marks are all supported (see the module docstring), by the same names as MARKS.
+CHECKED = set(MARKS) - set(NOT_CONFIRMED)

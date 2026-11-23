@@ -75,8 +75,9 @@ Hand-curated inputs:
 - `tools/confusion_groups.py`: the look-alike groups, tips and size-ladder benchmark birds.
 - `tools/silhouette_review.py`: PhyloPic images reviewed as perched / in-flight / blocked.
 - `tools/field_marks.py`: per-species field marks for the ID key (bill colour, throat, tail, call, range…),
-  with per-plumage overrides. **Draft**: add a species to `CHECKED` once its marks are verified against a
-  field guide; until then the app shows a "draft" note under its key.
+  with per-plumage overrides. Checked against Wikipedia's species descriptions (not a printed field guide);
+  species with marks that source didn't confirm are listed in `NOT_CONFIRMED`, and the app flags keys that
+  include them.
 
 ## Credits
 

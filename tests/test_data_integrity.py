@@ -145,7 +145,7 @@ def test_field_marks_are_well_formed(marks, by_id):
 
 
 # Plumages that genuinely can't be told apart by the recorded marks (the group tips say so).
-KNOWN_UNSEPARATED = {("Black-faced Cuckooshrike", "White-bellied Cuckooshrike")}
+KNOWN_UNSEPARATED = set()
 
 
 def test_each_group_key_separates_its_birds(groups, marks, by_id):

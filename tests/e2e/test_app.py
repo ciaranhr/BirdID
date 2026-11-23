@@ -80,7 +80,7 @@ def test_lookalikes_page_lists_group_mates_and_builds_a_key(app, sp):
     expect(key).to_contain_text("black")
     expect(key).to_contain_text("pale yellow")
     expect(key.locator("a.me")).to_have_text("Royal Spoonbill")
-    expect(app.locator("#key-card .note")).to_contain_text("Draft field marks")
+    expect(app.locator("#key-card .note")).not_to_contain_text("Draft")  # both spoonbills are checked
     table = app.locator("table.marks")
     expect(table.locator("thead th")).to_have_count(3)  # label column + 2 birds
     expect(table.locator("tr.diff th").first).to_have_text("Bill colour")
@@ -92,6 +92,7 @@ def test_key_separates_plumages(app, sp):
     expect(key.locator("a", has_text="Superb Fairywren (female)")).to_have_count(1)
     expect(key.locator("a", has_text="Superb Fairywren (male)")).to_have_count(1)
     expect(key).not_to_contain_text("not separated")
+    expect(app.locator("#key-card .note")).to_contain_text("Draft: some marks for Superb Fairywren")
 
 
 def test_key_leaf_opens_that_birds_lookalikes(app, sp):

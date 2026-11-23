@@ -516,7 +516,8 @@ function viewLookalikes(id) {
         <section class="card" id="key-card"><h2>Tell them apart</h2>
           <div class="key">${keyHTML(buildKey(leaves, TRAITS), s.id)}</div>
           ${noMarks.length ? `<p class="muted small">No field marks recorded yet for ${noMarks.map((x) => esc(x.common)).join(', ')}.</p>` : ''}
-          ${leaves.some((l) => !l.ok) ? '<div class="note">Draft field marks, not yet checked against a field guide. Confirm with Pizzey &amp; Knight, Morcombe, Menkhorst or Merlin.</div>' : ''}
+          <div class="note">${leaves.some((l) => !l.ok) ? `Draft: some marks for ${esc([...new Set(leaves.filter((l) => !l.ok).map((l) => l.s.common))].join(', '))} aren't confirmed yet. `
+            : ''}Field marks are checked against published species descriptions, not a field guide in hand. Confirm with Pizzey &amp; Knight, Morcombe, Menkhorst or Merlin.</div>
         </section>
         <section class="card" id="marks-card"><h2>Side by side</h2>${compareTableHTML(leaves, s.id)}</section>`
       : set.length >= 2 ? '<section class="card" id="key-card"><h2>Tell them apart</h2><p class="muted">No ID key for these birds yet. Compare their sizes and photos below.</p></section>' : ''}
@@ -814,7 +815,7 @@ function viewAbout() {
     </section>
     <section class="card"><h2>Accuracy notes</h2>
       <ul class="tips small">
-        <li>The ID key is built from short field-mark notes that are still a draft, not yet checked against a field guide. Birds whose sexes or ages differ get one entry per plumage.</li>
+        <li>The ID key is built from short field-mark notes checked against published species descriptions (Wikipedia articles citing HANZAB and the field guides), not a printed field guide. Keys that include marks not yet confirmed say so. Birds whose sexes or ages differ get one entry per plumage.</li>
         <li>Lengths are average bill-tip-to-tail-tip measurements; individual birds and sexes vary (ranges shown where known).</li>
         <li>Silhouettes come from PhyloPic. Where no drawing exists for the exact species, a relative from the same genus, family or order stands in - shape is then approximate. The credit under each ladder says which.</li>
         <li>Silhouettes are scaled so their longest side matches body length (or ≈${WINGSPAN_FACTOR}× for in-flight drawings), so treat the ladder as a guide to <i>relative</i> size.</li>
