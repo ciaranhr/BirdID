@@ -192,6 +192,28 @@ def test_build_groups_resolves_aliases_and_reports_problems():
     assert any("'Emu'" in p for p in problems) and any("Dodo" in p for p in problems)
 
 
+def test_build_marks_resolves_names_and_reports_problems():
+    species = [
+        {"id": 1, "common": "Superb Fairywren", "sci": "Malurus cyaneus"},
+        {"id": 2, "common": "Grey Teal", "sci": "Anas gracilis"},
+    ]
+    marks = {
+        "Superb Fairy-wren|Superb Fairywren": {"range": "south-east", "plumages": {"female": {"tail": "brownish"}}},
+        "Grey Teal": {"throat": "pale", "colour": "grey"},
+        "Dodo": {"bill": "huge"},
+    }
+    traits = [("tail", "Tail", 0), ("throat", "Throat", 0), ("range", "Range", 2)]
+    out, problems = bd.build_marks(species, marks, traits, checked={"Grey Teal", "Moa"})
+    assert out["traits"][0] == {"key": "tail", "label": "Tail", "tier": 0}
+    assert out["marks"] == {
+        "1": {"t": {"range": "south-east"}, "ok": False, "p": {"female": {"tail": "brownish"}}},
+        "2": {"t": {"throat": "pale", "colour": "grey"}, "ok": True},
+    }
+    assert any("Dodo" in p for p in problems)
+    assert any("unknown trait 'colour'" in p for p in problems)
+    assert any("Moa" in p for p in problems)
+
+
 def test_curated_groups_and_benchmarks_all_resolve(tmp_path):
     """Every name in confusion_groups.py must match a species in the real data."""
     *_, problems = bd.build(out=str(tmp_path))
@@ -201,6 +223,6 @@ def test_curated_groups_and_benchmarks_all_resolve(tmp_path):
 def test_committed_app_data_is_up_to_date(tmp_path):
     """Fails if data-src/ or the tools changed without re-running tools/build_data.py."""
     bd.build(out=str(tmp_path))
-    for name in ("species.json", "groups.json"):
+    for name in ("species.json", "groups.json", "marks.json"):
         assert filecmp.cmp(tmp_path / name, os.path.join(bd.OUT, name), shallow=False), \
             f"app/data/{name} is stale - run python3 tools/build_data.py"

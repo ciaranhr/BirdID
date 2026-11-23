@@ -5,7 +5,7 @@
 import {
   WINGSPAN_FACTOR, esc, photoSize, fmtLen, fmtMass, genus, isHybrid, imgTag, setImgSrc,
   indexSpecies, search as searchIn, silDims, nearestBenchmarks as nearestIn,
-  byLocalThenObs, speciesList, LIST_SORTS,
+  byLocalThenObs, speciesList, LIST_SORTS, markLeaves, buildKey, compareRows,
 } from './lib.js';
 import {
   REGIONS, RADII, DEFAULT_RADIUS, loadLocation, saveLocation, validLocation, locationLabel,
@@ -32,6 +32,7 @@ const ORDERS = [
 const ANNOT = { 2: 'adult', 8: 'juvenile', 10: 'female', 11: 'male' };
 
 let SPECIES = [], BYID = new Map(), GROUPS = [], BENCH = [];
+let MARKS = {}, TRAITS = []; // field marks for the ID key: {taxonId: {t, p?, ok}}, [{key, label, tier}]
 const view = document.getElementById('view');
 
 // ---------- location ("species near me") ----------
@@ -103,12 +104,16 @@ async function getJSON(url, tries = 3) {
 const search = (q, limit) => searchIn(SPECIES, q, limit, LOCAL);
 const popular = (n = 25) => SPECIES.filter((s) => !isHybrid(s)).sort(byLocalThenObs(LOCAL)).slice(0, n);
 
-function resultItem(s, tag = 'a') {
+/** A species row: a link (to `href` + id) or, with tag 'button', a picker choice. `note` is extra muted text. */
+function resultItem(s, tag = 'a', { href = '#/s/', note = '' } = {}) {
   const img = s.photo ? imgTag(s.photo) : '<span class="thumb"></span>';
-  const near = LOCAL?.get(s.id) ? ' · <span class="nearby">nearby</span>' : '';
-  const inner = `${img}<span class="names"><b>${esc(s.common)}</b><i>${esc(s.sci)}${s.len ? ` · ${s.len} cm` : ''}${near}</i></span>`;
+  const n = LOCAL?.get(s.id);
+  const near = n ? ` · <span class="nearby">nearby${tag === 'a' ? ` (${n.toLocaleString()})` : ''}</span>` : '';
+  const key = tag === 'a' && MARKS[s.id] ? '<span class="keybadge" title="Has an ID key">ID key</span>' : '';
+  const inner = `${img}<span class="names"><b>${esc(s.common)}</b><i>${esc(s.sci)}${s.len ? ` · ${s.len} cm` : ''}${near}</i>${
+    note ? `<i>${esc(note)}</i>` : ''}</span>${key}`;
   return tag === 'a'
-    ? `<li><a href="#/s/${s.id}">${inner}</a></li>`
+    ? `<li><a href="${href}${s.id}">${inner}</a></li>`
     : `<li><button type="button" data-id="${s.id}">${inner}</button></li>`;
 }
 
@@ -375,33 +380,166 @@ function setNav(key) {
   document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === key));
 }
 
+// ---------- home: birds near you ----------
+const HOME_PAGE = 40;
+const homeState = { q: '', shown: HOME_PAGE, scroll: 0 };
+
+/** Birds for the home list: those recorded locally (most records first), else the most observed. */
+function homeBirds() {
+  const all = SPECIES.filter((s) => !isHybrid(s) && (!LOCAL || LOCAL.has(s.id)));
+  return all.sort(byLocalThenObs(LOCAL));
+}
+
 function viewHome() {
   setNav('home');
-  const cats = [...new Set(GROUPS.map((g) => g.cat))];
   view.innerHTML = `
     ${locBar()}
-    <input class="search" id="q" type="search" placeholder="Search a species, e.g. 'raven' or 'honeyeater'…" autocomplete="off" enterkeyhint="search">
+    <input class="search" id="q" type="search" placeholder="Search a bird, e.g. 'raven' or 'honeyeater'…" autocomplete="off" enterkeyhint="search" value="${esc(homeState.q)}">
+    <p class="muted small home-note" id="home-note" role="status"></p>
     <ul class="results" id="qres"></ul>
-    <div id="groups">
-      <p class="muted small" style="margin:.8rem 0 0">Tap a group to compare look-alikes side by side: true-scale silhouettes, sizes, field-mark notes and real iNaturalist photos.</p>
-      ${cats.map((c) => `
-        <h3 class="cat-title">${esc(c)}</h3>
-        <div class="group-list">
-          ${GROUPS.map((g, i) => [g, i]).filter(([g]) => g.cat === c).map(([g, i]) => `
-            <a class="group-card" href="#/c/${g.ids.join(',')}?g=${i}">
-              <div class="stack">${g.ids.slice(0, 3).map((id) => imgTag(BYID.get(id)?.photo || '')).join('')}</div>
-              <span>${esc(g.title)}</span>
-            </a>`).join('')}
-        </div>`).join('')}
-    </div>`;
-  const q = document.getElementById('q'), res = document.getElementById('qres'), groups = document.getElementById('groups');
+    <div class="more-wrap"><button class="btn ghost" id="more" hidden>Show more</button></div>`;
+  const q = view.querySelector('#q'), res = view.querySelector('#qres'), more = view.querySelector('#more');
+  const note = view.querySelector('#home-note');
   const draw = () => {
-    const r = search(q.value);
-    res.innerHTML = r.map((s) => resultItem(s)).join('') || (q.value.trim() ? '<li class="empty">No matches</li>' : '');
-    groups.hidden = !!q.value.trim();
+    const text = homeState.q.trim();
+    const opts = { href: '#/id/' };
+    if (text) {
+      const r = search(text, 60);
+      note.textContent = '';
+      res.innerHTML = r.map((s) => resultItem(s, 'a', opts)).join('') || '<li class="empty">No matches</li>';
+      more.hidden = true;
+      return;
+    }
+    const all = homeBirds();
+    note.textContent = `${LOCAL ? `Birds recorded ${locIn(LOC)}, most recorded first.`
+      : LOC && local.status === 'loading' ? 'Loading birds near you… showing the most-recorded Australian birds meanwhile.'
+      : 'The most-recorded Australian birds. Set a location to list the birds around you.'} Tap one to see its look-alikes and how to tell them apart.`;
+    res.innerHTML = all.slice(0, homeState.shown).map((s) => resultItem(s, 'a', opts)).join('') || '<li class="empty">No birds</li>';
+    more.hidden = all.length <= homeState.shown;
   };
-  q.addEventListener('input', draw);
-  localListeners.add(() => { if (q.value.trim()) draw(); });
+  q.addEventListener('input', () => { homeState.q = q.value; homeState.shown = HOME_PAGE; draw(); });
+  more.onclick = () => { homeState.shown += HOME_PAGE; draw(); };
+  draw();
+  localListeners.add(draw);
+  return homeState.scroll;
+}
+
+// ---------- look-alikes & ID key ----------
+const MAX_LOOKALIKES = 8;
+const lookState = { nearOnly: true };
+
+const groupsOf = (s) => GROUPS.map((g, i) => [g, i]).filter(([g]) => g.ids.includes(s.id));
+
+/**
+ * Birds that look like `s`. A bird in a curated confusion group gets its group mates plus same-genus
+ * birds (family-and-size matches would add noise, e.g. ibis for a spoonbill); others get similarSpecies.
+ */
+function lookalikes(s) {
+  const out = [], seen = new Set([s.id]);
+  const push = (x, why) => { if (x && !seen.has(x.id)) { seen.add(x.id); out.push({ x, why }); } };
+  const groups = groupsOf(s);
+  for (const [g] of groups) g.ids.forEach((id) => push(BYID.get(id), g.title));
+  for (const [x, why] of similarSpecies(s)) if (!groups.length || why === 'same genus') push(x, why);
+  return out.slice(0, MAX_LOOKALIKES);
+}
+
+function leafLink(l, me, unk) {
+  return `<a href="#/id/${l.s.id}"${l.s.id === me ? ' class="me"' : ''}>${esc(l.label)}</a>${
+    unk.has(l.label) ? '<sup class="unk" title="Not recorded for a feature above, so listed under each answer">?</sup>' : ''}`;
+}
+
+/** Nested couplets: "Bill colour? black → Royal Spoonbill; pale yellow → Yellow-billed Spoonbill". */
+function keyHTML(node, me, unk = new Set()) {
+  if (!node.trait) {
+    const names = node.leaves.map((l) => leafLink(l, me, unk)).join(', ');
+    return node.leaves.length > 1
+      ? `<span class="key-tip">→ ${names} <span class="muted small">(not separated by the recorded marks: compare photos)</span></span>`
+      : `<span class="key-tip">→ ${names}</span>`;
+  }
+  return `<div class="couplet"><div class="key-q">${esc(node.trait.label)}?</div><ul>${node.branches.map((b) => {
+    const u = new Set([...unk, ...b.unknown.map((l) => l.label)]);
+    return `<li><span class="key-a">${esc(b.value)}</span> ${keyHTML(b.node, me, u)}</li>`;
+  }).join('')}</ul></div>`;
+}
+
+function compareTableHTML(leaves, me) {
+  const rows = compareRows(leaves, TRAITS);
+  return `<div class="table-scroll"><table class="marks">
+    <thead><tr><th></th>${leaves.map((l) => `<th${l.s.id === me ? ' class="me"' : ''}>${esc(l.s.common)}${
+      l.plumage ? `<br><span class="muted small">${esc(l.plumage)}</span>` : ''}</th>`).join('')}</tr></thead>
+    <tbody>
+      <tr><th>Length</th>${leaves.map((l) => `<td>${fmtLen(l.s)}</td>`).join('')}</tr>
+      ${rows.map((r) => `<tr${r.differs ? ' class="diff"' : ''}><th>${esc(r.label)}</th>${
+        r.cells.map((c) => `<td>${c ? esc(c) : '<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <p class="muted small">Highlighted rows differ between these birds.</p>`;
+}
+
+function viewLookalikes(id) {
+  setNav('home');
+  const s = BYID.get(id);
+  if (!s) { view.innerHTML = '<p class="empty">Species not found.</p>'; return; }
+  view.innerHTML = `
+    <div class="hero">
+      ${imgTag(photoSize(s.photo, 'medium'), 'alt=""')}
+      <div>
+        <h1>${esc(s.common)}</h1>
+        <div class="sci">${esc(s.sci)}</div>
+        <div class="stat-line"><span>Length <b>${fmtLen(s)}</b></span></div>
+        <div class="local-line small" id="local-line"></div>
+        <a class="small" href="#/s/${s.id}">Size ladder &amp; photos →</a>
+      </div>
+    </div>
+    <div id="look"></div>`;
+  const look = view.querySelector('#look');
+  const draw = () => {
+    view.querySelector('#local-line').innerHTML = localLine(s);
+    const all = lookalikes(s);
+    const filtering = lookState.nearOnly && !!LOCAL;
+    const shown = filtering ? all.filter((o) => LOCAL.has(o.x.id)) : all;
+    const hidden = filtering ? all.filter((o) => !LOCAL.has(o.x.id)) : [];
+    const set = [s, ...shown.map((o) => o.x)];
+    const leaves = markLeaves(set, MARKS);
+    const noMarks = set.filter((x) => !MARKS[x.id]);
+    const groups = groupsOf(s);
+    const cmpIds = set.slice(0, MAX_COMPARE).map((x) => x.id);
+
+    look.innerHTML = `
+      <section class="card"><div class="row"><h2 style="margin:0">Looks similar</h2><span class="spacer"></span>
+        ${LOCAL ? `<button class="chip" id="near-only" aria-pressed="${lookState.nearOnly}">📍 Near you only</button>` : ''}</div>
+        ${shown.length ? `<ul class="results">${shown.map((o) => resultItem(o.x, 'a', { href: '#/id/', note: o.why })).join('')}</ul>`
+          : `<p class="muted">${all.length ? `None of its look-alikes have been recorded ${esc(locIn(LOC))}.` : 'No look-alikes listed for this bird yet.'}</p>`}
+        ${hidden.length ? `<p class="muted small" id="hidden-note">Also similar, but not recorded ${esc(locIn(LOC))}: ${
+          hidden.map((o) => `<a href="#/id/${o.x.id}">${esc(o.x.common)}</a>`).join(', ')}.</p>` : ''}
+      </section>
+      ${leaves.length >= 2 ? `
+        <section class="card" id="key-card"><h2>Tell them apart</h2>
+          <div class="key">${keyHTML(buildKey(leaves, TRAITS), s.id)}</div>
+          ${noMarks.length ? `<p class="muted small">No field marks recorded yet for ${noMarks.map((x) => esc(x.common)).join(', ')}.</p>` : ''}
+          <div class="note">${leaves.some((l) => !l.ok) ? `Draft: some marks for ${esc([...new Set(leaves.filter((l) => !l.ok).map((l) => l.s.common))].join(', '))} aren't confirmed yet. `
+            : ''}Field marks are checked against published species descriptions, not a field guide in hand. Confirm with Pizzey &amp; Knight, Morcombe, Menkhorst or Merlin.</div>
+        </section>
+        <section class="card" id="marks-card"><h2>Side by side</h2>${compareTableHTML(leaves, s.id)}</section>`
+      : set.length >= 2 ? '<section class="card" id="key-card"><h2>Tell them apart</h2><p class="muted">No ID key for these birds yet. Compare their sizes and photos below.</p></section>' : ''}
+      ${groups.map(([g, i]) => `<section class="card"><h2>Field notes · ${esc(g.title)}</h2>
+        <ul class="tips">${g.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+        <p style="margin:.7rem 0 0"><a class="chip" href="#/c/${g.ids.join(',')}?g=${i}">⚖︎ Sizes &amp; photos for this group</a></p></section>`).join('')}
+      ${set.length >= 2 ? `<section class="card"><a class="btn" id="cmp-set" href="#/c/${cmpIds.join(',')}">Compare sizes &amp; photos side by side</a>
+        ${set.length > MAX_COMPARE ? `<p class="muted small">Shows the first ${MAX_COMPARE}.</p>` : ''}</section>` : ''}`;
+    const near = look.querySelector('#near-only');
+    if (near) near.onclick = () => { lookState.nearOnly = !lookState.nearOnly; draw(); };
+  };
+  draw();
+  localListeners.add(draw);
+}
+
+function localLine(s) {
+  const n = LOCAL?.get(s.id) || 0;
+  return !LOC ? ''
+    : local.status === 'loading' ? '<span class="muted">Checking local records…</span>'
+    : local.status !== 'ready' ? ''
+    : n ? `📍 <b>${n.toLocaleString()}</b> research-grade record${n === 1 ? '' : 's'} ${esc(locIn(LOC))}`
+    : `📍 <span class="muted">No research-grade records ${esc(locIn(LOC))}</span>`;
 }
 
 function similarSpecies(s) {
@@ -423,7 +561,7 @@ function viewSpecies(id) {
   setNav('');
   const s = BYID.get(id);
   if (!s) { view.innerHTML = '<p class="empty">Species not found.</p>'; return; }
-  const groups = GROUPS.map((g, i) => [g, i]).filter(([g]) => g.ids.includes(s.id));
+  const groups = groupsOf(s);
   const ladder = s.len
     ? ladderHTML([{ s, color: 'var(--c0)' }, ...nearestBenchmarks(s.len, s.id).map((b) => ({ s: b, ref: true }))])
     : '<p class="muted small">No body-length data for this species (often vagrants, hybrids or domestic birds).</p>';
@@ -445,14 +583,10 @@ function viewSpecies(id) {
       <div id="gfilters"></div><div id="gallery"></div>
     </section>`;
   const drawLocal = () => {
-    const n = LOCAL?.get(s.id) || 0;
-    view.querySelector('#local-line').innerHTML = !LOC ? ''
-      : local.status === 'loading' ? '<span class="muted">Checking local records…</span>'
-      : local.status !== 'ready' ? ''
-      : n ? `📍 <b>${n.toLocaleString()}</b> research-grade record${n === 1 ? '' : 's'} ${esc(locIn(LOC))}`
-      : `📍 <span class="muted">No research-grade records ${esc(locIn(LOC))}</span>`;
+    view.querySelector('#local-line').innerHTML = localLine(s);
     const sim = similarSpecies(s);
     view.querySelector('#cmp-card').innerHTML = groups.length || sim.length ? `<section class="card"><h2>Compare with…</h2>
+      <p style="margin:0 0 .6rem"><a class="btn" id="look-link" href="#/id/${s.id}">Look-alikes &amp; how to tell them apart</a></p>
       <div class="chips">
         ${groups.map(([g, i]) => `<a class="chip" href="#/c/${g.ids.join(',')}?g=${i}">⚖︎ ${esc(g.title)}</a>`).join('')}
         ${sim.map(([x]) => `<a class="chip" href="#/c/${s.id},${x.id}">vs ${esc(x.common)}${LOCAL?.get(x.id) ? ' 📍' : ''}</a>`).join('')}
@@ -490,7 +624,7 @@ function viewCompare(ids, gIdx) {
         <p class="muted">Pick 2–${MAX_COMPARE} birds to see them at true relative size, with photos side by side.</p>
         <div class="chips cmp-chips">${sp.map((s, i) => chipHTML(s, i)).join('')}${addBtn}</div>
       </section>
-      <p class="muted small">Or start from one of the <a href="#/">confusion groups</a>.</p>`;
+      <p class="muted small">Or <a href="#/">pick a bird</a> to see its look-alikes and how to tell them apart.</p>`;
     wireCompareChips(sp, nav);
     return;
   }
@@ -668,8 +802,9 @@ function viewAbout() {
     <section class="card"><h2>What this is</h2>
       <p>A companion to Merlin for the parts of ID that photos in field guides don't cover well: <b>shape</b>, <b>size</b>, and what birds <b>really look like</b> in ordinary photos - distant, backlit, in flight.</p>
       <ul class="tips">
+        <li><b>Birds near you</b> - the birds recorded around you. Tap one to see what it could be confused with, an <b>ID key</b> that asks the questions that tell them apart (bill colour, throat, tail…), and a side-by-side table of field marks.</li>
         <li><b>Size ladder</b> - every species drawn to true relative scale beside familiar birds (fairy-wren, sparrow, magpie, raven…).</li>
-        <li><b>Confusion groups</b> - curated Australian look-alikes with field-mark notes and synced photo rows.</li>
+        <li><b>Confusion groups</b> - ${GROUPS.length} curated Australian look-alike sets with field-mark notes and synced photo rows.</li>
         <li><b>Real-world photos</b> - research-grade iNaturalist observations from Australia; filter by adult/juvenile/male/female. “Recent” order gives typical, unpolished views.</li>
         <li><b>Species near you</b> - set a location (GPS or a state) and search, suggestions and the species list favour birds actually recorded there.</li>
       </ul>
@@ -680,6 +815,7 @@ function viewAbout() {
     </section>
     <section class="card"><h2>Accuracy notes</h2>
       <ul class="tips small">
+        <li>The ID key is built from short field-mark notes checked against published species descriptions (Wikipedia articles citing HANZAB and the field guides), not a printed field guide. Keys that include marks not yet confirmed say so. Birds whose sexes or ages differ get one entry per plumage.</li>
         <li>Lengths are average bill-tip-to-tail-tip measurements; individual birds and sexes vary (ranges shown where known).</li>
         <li>Silhouettes come from PhyloPic. Where no drawing exists for the exact species, a relative from the same genus, family or order stands in - shape is then approximate. The credit under each ladder says which.</li>
         <li>Silhouettes are scaled so their longest side matches body length (or ≈${WINGSPAN_FACTOR}× for in-flight drawings), so treat the ladder as a guide to <i>relative</i> size.</li>
@@ -705,10 +841,12 @@ function route() {
   const parts = path.split('/').filter(Boolean);
   const params = new URLSearchParams(qs || '');
   if (current === 'list') listState.scroll = window.scrollY;
+  if (current === '') homeState.scroll = window.scrollY;
   cameFromApp = parts[0] === 'location' && current !== null;
   current = parts[0] || '';
   let y = 0;
   if (parts[0] === 's') viewSpecies(+parts[1]);
+  else if (parts[0] === 'id') viewLookalikes(+parts[1]);
   else if (parts[0] === 'c') {
     const ids = [...new Set((parts[1] || '').split(',').filter(Boolean).map(Number))];
     viewCompare(ids, params.has('g') ? +params.get('g') : null);
@@ -716,22 +854,21 @@ function route() {
   else if (parts[0] === 'list') y = viewList();
   else if (parts[0] === 'location') viewLocation();
   else if (parts[0] === 'about') viewAbout();
-  else viewHome();
+  else y = viewHome();
   window.scrollTo(0, y);
 }
 
 async function boot() {
   view.innerHTML = '<p class="loading">Loading…</p>';
   try {
-    const [species, groups] = await Promise.all([
-      fetch('data/species.json').then((r) => r.json()),
-      fetch('data/groups.json').then((r) => r.json()),
-    ]);
+    const [species, groups, marks] = await Promise.all(
+      ['species', 'groups', 'marks'].map((f) => fetch(`data/${f}.json`).then((r) => r.json())));
     SPECIES = species;
     for (const s of SPECIES) {
       BYID.set(indexSpecies(s).id, s);
     }
     GROUPS = groups.groups; BENCH = groups.benchmarks;
+    MARKS = marks.marks; TRAITS = marks.traits;
   } catch (e) {
     view.innerHTML = `<p class="empty">Couldn't load data (${esc(e.message)}).</p>`;
     return;

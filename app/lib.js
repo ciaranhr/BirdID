@@ -115,3 +115,90 @@ export function speciesList(species, { q = '', sort = 'family', local = null, ne
   out.forEach((f) => f.items.sort((a, b) => cmpText(a.common, b.common)));
   return out;
 }
+
+// ---------- dichotomous ID key (data/marks.json) ----------
+
+/**
+ * Key entries for `species`: one per species, or one per plumage ("Superb Fairywren (female)") for
+ * birds whose sexes/ages differ. Species without marks are left out.
+ * -> [{ s, label, plumage, t: {trait: value}, ok }]
+ */
+export function markLeaves(species, marks) {
+  const out = [];
+  for (const s of species) {
+    const m = marks[s.id];
+    if (!m) continue;
+    const pl = Object.entries(m.p || {});
+    if (!pl.length) out.push({ s, label: s.common, plumage: '', t: { ...m.t }, ok: !!m.ok });
+    for (const [p, t] of pl) out.push({ s, label: `${s.common} (${p})`, plumage: p, t: { ...m.t, ...t }, ok: !!m.ok });
+  }
+  return out;
+}
+
+const normVal = (v) => String(v).trim().toLowerCase();
+const known = (v) => v != null && String(v).trim() !== '';
+
+/** Body lengths only split a set when the gap between two sizes is at least this ratio. */
+export const SIZE_GAP = 1.3;
+
+/** A 'size' value function for these leaves (split at the widest clear length gap), or null. */
+export function sizeSplit(leaves) {
+  const lens = [...new Set(leaves.map((l) => l.s.len).filter(Boolean))].sort((a, b) => a - b);
+  let best = null;
+  for (let i = 1; i < lens.length; i++) {
+    const r = lens[i] / lens[i - 1];
+    if (r >= SIZE_GAP && (!best || r > best.r)) best = { r, lo: lens[i - 1], hi: lens[i] };
+  }
+  if (!best) return null;
+  return (l) => (!l.s.len ? undefined : l.s.len <= best.lo ? `smaller (up to ${best.lo} cm)` : `larger (${best.hi} cm or more)`);
+}
+
+/**
+ * A key over `leaves`: { leaves } at a tip, or { trait: {key, label}, branches: [{ value, unknown, node }] }.
+ * At each step it picks the trait whose largest branch is smallest (the most even split), preferring
+ * traits every leaf has, then visible marks over shape/behaviour over call/range. Leaves with no
+ * value for the chosen trait go down every branch (listed in `unknown`). Every branch is smaller
+ * than its parent, so the recursion ends; a tip with 2+ leaves means the marks can't separate them.
+ */
+export function buildKey(leaves, traits) {
+  if (leaves.length < 2) return { leaves };
+  const fns = traits.map((tr) => ({ key: tr.key, label: tr.label, tier: tr.tier || 0, val: (l) => l.t[tr.key] }));
+  const size = sizeSplit(leaves);
+  if (size) fns.push({ key: 'size', label: 'Size', tier: 1, val: size });
+  let best = null;
+  fns.forEach((tr, i) => {
+    const groups = new Map(), unknown = [];
+    for (const l of leaves) {
+      const v = tr.val(l);
+      if (!known(v)) { unknown.push(l); continue; }
+      const k = normVal(v);
+      if (!groups.has(k)) groups.set(k, { value: String(v).trim(), leaves: [] });
+      groups.get(k).leaves.push(l);
+    }
+    if (groups.size < 2) return;
+    const branches = [...groups.values()].map((b) => ({ value: b.value, leaves: [...b.leaves, ...unknown], unknown }));
+    const maxB = Math.max(...branches.map((b) => b.leaves.length));
+    if (maxB >= leaves.length) return;
+    const cost = maxB + 0.6 * tr.tier + 1.5 * unknown.length;
+    if (!best || cost < best.cost - 1e-9) best = { cost, tr, branches };
+  });
+  if (!best) return { leaves };
+  return {
+    trait: { key: best.tr.key, label: best.tr.label },
+    branches: best.branches.map((b) => ({ value: b.value, unknown: b.unknown, node: buildKey(b.leaves, traits) })),
+  };
+}
+
+/**
+ * Side-by-side rows for `leaves`: every trait at least one of them has, as
+ * [{ key, label, cells: [value|null], differs }], rows that tell them apart first.
+ */
+export function compareRows(leaves, traits) {
+  const rows = [];
+  for (const tr of traits) {
+    const cells = leaves.map((l) => (known(l.t[tr.key]) ? String(l.t[tr.key]).trim() : null));
+    if (!cells.some(Boolean)) continue;
+    rows.push({ key: tr.key, label: tr.label, cells, differs: new Set(cells.filter(Boolean).map(normVal)).size > 1 });
+  }
+  return rows.sort((a, b) => b.differs - a.differs);
+}

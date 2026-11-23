@@ -11,8 +11,9 @@ Open the link on your phone, then add it to your home screen so it works like an
 
 A phone-friendly web app (PWA) that complements Merlin for Australian birds:
 
+- **Birds near you (home page)**: the birds recorded around you (or the most-recorded Australian birds), searchable. Tap one to see what it looks like, a **dichotomous ID key** that asks the questions that separate them (bill colour? throat? tail?), and a side-by-side table of field marks with the differences highlighted. The key is computed from a per-species trait table, so with a location set it only keys out the look-alikes recorded near you. Birds whose sexes or ages differ (fairy-wrens, Mallard, grebes…) get one entry per plumage.
 - **Size ladder**: each species drawn at true relative scale next to familiar birds (fairy-wren, sparrow, magpie, raven, ibis, eagle…).
-- **Confusion groups**: 43 curated Australian look-alike sets with true-scale silhouettes, length/weight ratios, field-mark notes and photo rows side by side. You can also compare any 2–5 species.
+- **Confusion groups**: 43 curated Australian look-alike sets with true-scale silhouettes, length/weight ratios, field-mark notes and photo rows side by side, reached from each bird's look-alike page. You can also compare any 2–5 species.
 - **Real-world photos**: research-grade iNaturalist observations from Australia, filterable by adult/juvenile/male/female, sorted by "best" or "recent" (recent gives more typical, imperfect views).
 - **Species list**: every bird with its common and scientific name, grouped by family or sorted A–Z, searchable by any of them.
 - **Species near you**: set a location (GPS, rounded to ~1 km, or a state/territory) and search, look-alike suggestions and the species list favour birds with research-grade iNaturalist records there. Counts are cached on the phone for a week, so they work offline.
@@ -73,6 +74,10 @@ Hand-curated inputs:
 
 - `tools/confusion_groups.py`: the look-alike groups, tips and size-ladder benchmark birds.
 - `tools/silhouette_review.py`: PhyloPic images reviewed as perched / in-flight / blocked.
+- `tools/field_marks.py`: per-species field marks for the ID key (bill colour, throat, tail, call, range…),
+  with per-plumage overrides. Checked against Wikipedia's species descriptions (not a printed field guide);
+  species with marks that source didn't confirm are listed in `NOT_CONFIRMED`, and the app flags keys that
+  include them.
 
 ## Credits
 

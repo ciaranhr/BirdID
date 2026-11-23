@@ -277,6 +277,39 @@ def test_similar_species_prefer_local(app, net, sp):
     expect(first).to_contain_text("📍")
 
 
+def test_home_lists_local_birds_most_recorded_first(app, net, sp):
+    raven, magpie = sp("Forest Raven"), sp("Australian Magpie")
+    net.local = {raven["id"]: 5, magpie["id"]: 99}
+    app.goto("/")
+    set_region(app, "Tasmania")
+    expect(app.locator("#home-note")).to_contain_text("Birds recorded in Tasmania, most recorded first")
+    rows = app.locator("#qres li a")
+    expect(rows).to_have_count(2)
+    expect(rows.locator(".names b")).to_have_text(["Australian Magpie", "Forest Raven"])
+    expect(rows.first).to_contain_text("nearby (99)")
+    expect(app.locator("#more")).to_be_hidden()
+
+
+def test_lookalikes_near_you_only_filters_list_and_key(app, net, sp):
+    ravens = ["Australian Raven", "Little Raven", "Forest Raven", "Torresian Crow", "Little Crow"]
+    net.local = {sp("Forest Raven")["id"]: 40, sp("Little Raven")["id"]: 3}
+    app.goto("/")
+    set_region(app, "Tasmania")
+    expect(app.locator(".locbar")).to_contain_text("2 species recorded")
+    app.goto(f"/#/id/{sp('Forest Raven')['id']}")
+    similar = app.locator(".card", has_text="Looks similar")
+    expect(similar.locator(".results li")).to_have_count(1)
+    expect(similar.locator(".results li")).to_contain_text("Little Raven")
+    expect(app.locator("#hidden-note")).to_contain_text("Australian Raven")
+    key_links = app.locator("#key-card .key-tip a")
+    assert sorted(set(key_links.all_inner_texts())) == ["Forest Raven", "Little Raven"]
+    app.click("#near-only")
+    expect(app.locator("#near-only")).to_have_attribute("aria-pressed", "false")
+    expect(app.locator("#hidden-note")).to_have_count(0)
+    expect(similar.locator(".results li", has_text="Australian Raven")).to_have_count(1)
+    assert set(ravens) <= set(key_links.all_inner_texts())
+
+
 # ---------- species list page ----------
 
 def test_species_list_shows_scientific_names_by_family(app, species, sp):

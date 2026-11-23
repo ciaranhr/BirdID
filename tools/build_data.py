@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Merge source data into app/data/species.json and app/data/groups.json.
+"""Merge source data into app/data/species.json, groups.json and marks.json.
 
 Sources (all in data-src/, fetched by tools/fetch_inat.py, fetch_anc.py and phylopic.py):
   - iNaturalist species counts for Aves in Australia (place 6744) + ancestry
   - Garnett et al. 2015 "Australian Bird Data Version 1" (CC0) for body length / mass
   - PhyloPic silhouettes (various CC licences, attribution kept)
+  - tools/confusion_groups.py and tools/field_marks.py (hand-curated)
 
 Usage: python3 tools/build_data.py
 """
@@ -16,6 +17,7 @@ OUT = os.path.join(ROOT, "app", "data")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from confusion_groups import GROUPS, BENCHMARKS  # noqa: E402
+from field_marks import TRAITS, MARKS, CHECKED  # noqa: E402
 from silhouette_review import FLIGHT, BLOCK, PERCHED  # noqa: E402
 
 
@@ -254,6 +256,30 @@ def build_groups(species, groups=GROUPS, benchmarks=BENCHMARKS):
     return groups_out, bench_ids, problems
 
 
+def build_marks(species, marks=MARKS, traits=TRAITS, checked=CHECKED):
+    """-> ({traits, marks: {id: {t, p?, ok}}}, problems). Unknown names or trait keys are reported."""
+    resolve = Resolver(species)
+    keys = {k for k, _, _ in traits}
+    problems, out = [], {}
+    for name, rec in marks.items():
+        s = resolve(name)
+        if not s:
+            problems.append(f"field marks: no match for '{name}'")
+            continue
+        base = {k: v for k, v in rec.items() if k != "plumages"}
+        plumages = rec.get("plumages") or {}
+        for k in [*base, *(k for p in plumages.values() for k in p)]:
+            if k not in keys:
+                problems.append(f"field marks '{name}': unknown trait '{k}'")
+        entry = {"t": base, "ok": name in checked}
+        if plumages:
+            entry["p"] = plumages
+        out[str(s["id"])] = entry
+    for name in checked - set(marks):
+        problems.append(f"field marks: CHECKED name '{name}' has no marks")
+    return {"traits": [{"key": k, "label": l, "tier": t} for k, l, t in traits], "marks": out}, problems
+
+
 # ---------- main ----------
 
 def load_json(*parts):
@@ -267,12 +293,16 @@ def build(src=SRC, out=OUT):
                   load_json(src, "pp", "ord.json"))
     species = build_species(load_json(src, "inat_species.json"), load_json(src, "inat_anc.json"), morph, pp)
     groups_out, bench_ids, problems = build_groups(species)
+    marks_out, mark_problems = build_marks(species)
+    problems += mark_problems
 
     os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "species.json"), "w") as f:
         json.dump(species, f, separators=(",", ":"))
     with open(os.path.join(out, "groups.json"), "w") as f:
         json.dump({"groups": groups_out, "benchmarks": bench_ids}, f, separators=(",", ":"))
+    with open(os.path.join(out, "marks.json"), "w") as f:
+        json.dump(marks_out, f, separators=(",", ":"), ensure_ascii=False)
     return species, groups_out, bench_ids, problems
 
 

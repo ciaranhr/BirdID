@@ -18,33 +18,125 @@ def open_species(app, s):
     expect(app.locator("h1")).to_have_text(s["common"])
 
 
-# ---------- home & search ----------
+# ---------- home: birds near you & search ----------
 
-def test_home_lists_every_group_by_category(app, groups):
+def test_home_lists_most_recorded_birds_without_location(app, species):
     app.goto("/")
-    expect(app.locator(".group-card")).to_have_count(len(groups["groups"]))
-    cats = list(dict.fromkeys(g["cat"] for g in groups["groups"]))
-    expect(app.locator(".cat-title")).to_have_text(cats)
     expect(app.locator("[data-nav=home]")).to_have_class(re.compile("active"))
+    expect(app.locator("#home-note")).to_contain_text("most-recorded Australian birds")
+    rows = app.locator("#qres li a")
+    expect(rows).to_have_count(40)
+    top = sorted((s for s in species if "×" not in s["sci"]), key=lambda s: -s["obs"])[:40]
+    assert rows.locator(".names b").all_inner_texts() == [s["common"] for s in top]
+    expect(rows.first).to_have_attribute("href", f"#/id/{top[0]['id']}")
+    app.click("#more")
+    expect(rows).to_have_count(80)
 
 
-def test_search_shows_results_and_hides_groups(app):
+def test_home_marks_birds_that_have_an_id_key(app, sp):
+    app.goto("/")
+    app.fill("#q", "australian raven")
+    expect(app.locator("#qres li").first.locator(".keybadge")).to_have_text("ID key")
+
+
+def test_search_shows_results_and_restores_the_list(app):
     app.goto("/")
     app.fill("#q", "raven")
     expect(app.locator("#qres li").first).to_contain_text("Australian Raven")
-    expect(app.locator("#groups")).to_be_hidden()
+    expect(app.locator("#more")).to_be_hidden()
     app.fill("#q", "zzqqxx")
     expect(app.locator("#qres")).to_have_text("No matches")
     app.fill("#q", "")
-    expect(app.locator("#groups")).to_be_visible()
+    expect(app.locator("#qres li a")).to_have_count(40)
 
 
-def test_search_result_opens_species(app, sp):
+def test_search_result_opens_lookalikes(app, sp):
     app.goto("/")
     app.fill("#q", "magpie")
     app.locator("#qres a", has_text="Australian Magpie").first.click()
-    expect(app).to_have_url(re.compile(rf"#/s/{sp('Australian Magpie')['id']}$"))
+    expect(app).to_have_url(re.compile(rf"#/id/{sp('Australian Magpie')['id']}$"))
     expect(app.locator("h1")).to_have_text("Australian Magpie")
+
+
+def test_home_keeps_search_after_visiting_a_bird(app):
+    app.goto("/")
+    app.fill("#q", "raven")
+    app.locator("#qres a", has_text="Little Raven").first.click()
+    expect(app.locator("h1")).to_have_text("Little Raven")
+    app.go_back()
+    expect(app.locator("#q")).to_have_value("raven")
+    expect(app.locator("#qres li").first).to_contain_text("raven", ignore_case=True)
+
+
+# ---------- look-alikes & ID key ----------
+
+def test_lookalikes_page_lists_group_mates_and_builds_a_key(app, sp):
+    spoon = sp("Royal Spoonbill")
+    app.goto(f"/#/id/{spoon['id']}")
+    expect(app.locator("h1")).to_have_text("Royal Spoonbill")
+    expect(app.locator(".card", has_text="Looks similar").locator(".results li").first).to_contain_text("Yellow-billed Spoonbill")
+    key = app.locator("#key-card .key")
+    expect(key.locator(".key-q").first).to_have_text("Bill colour?")
+    expect(key).to_contain_text("black")
+    expect(key).to_contain_text("pale yellow")
+    expect(key.locator("a.me")).to_have_text("Royal Spoonbill")
+    expect(app.locator("#key-card .note")).not_to_contain_text("Draft")  # both spoonbills are checked
+    table = app.locator("table.marks")
+    expect(table.locator("thead th")).to_have_count(3)  # label column + 2 birds
+    expect(table.locator("tr.diff th").first).to_have_text("Bill colour")
+
+
+def test_key_separates_plumages(app, sp):
+    app.goto(f"/#/id/{sp('Superb Fairywren')['id']}")
+    key = app.locator("#key-card .key")
+    expect(key.locator("a", has_text="Superb Fairywren (female)")).to_have_count(1)
+    expect(key.locator("a", has_text="Superb Fairywren (male)")).to_have_count(1)
+    expect(key).not_to_contain_text("not separated")
+    expect(app.locator("#key-card .note")).to_contain_text("Draft: some marks for Superb Fairywren")
+
+
+def test_key_leaf_opens_that_birds_lookalikes(app, sp):
+    app.goto(f"/#/id/{sp('Royal Spoonbill')['id']}")
+    app.locator("#key-card a", has_text="Yellow-billed Spoonbill").first.click()
+    expect(app.locator("h1")).to_have_text("Yellow-billed Spoonbill")
+
+
+def test_lookalikes_page_shows_group_notes_and_compare_links(app, groups, sp):
+    magpie = sp("Australian Magpie")
+    gi, g = next((i, g) for i, g in enumerate(groups["groups"]) if magpie["id"] in g["ids"])
+    app.goto(f"/#/id/{magpie['id']}")
+    notes = app.locator(".card", has_text=f"Field notes · {g['title']}")
+    expect(notes.locator(".tips li")).to_have_count(len(g["tips"]))
+    notes.locator("a.chip").click()
+    expect(app).to_have_url(re.compile(rf"#/c/{','.join(map(str, g['ids']))}\?g={gi}$"))
+    expect(app.locator("h1")).to_have_text(g["title"])
+
+
+def test_lookalikes_compare_button(app, sp):
+    spoon = sp("Royal Spoonbill")
+    app.goto(f"/#/id/{spoon['id']}")
+    app.click("#cmp-set")
+    expect(app.locator(".cmp-chips .chip a")).to_have_text(["Royal Spoonbill", "Yellow-billed Spoonbill"])
+
+
+def test_bird_without_marks_explains(app, species, groups):
+    in_groups = {i for g in groups["groups"] for i in g["ids"]}
+    s = next(x for x in sorted(species, key=lambda x: -x["obs"]) if x["id"] not in in_groups and x["len"] and "×" not in x["sci"])
+    app.goto(f"/#/id/{s['id']}")
+    expect(app.locator("h1")).to_have_text(s["common"])
+    expect(app.locator("#key-card")).to_contain_text("No ID key for these birds yet")
+
+
+def test_unknown_lookalike_id(app):
+    app.goto("/#/id/999999999")
+    expect(app.locator("main")).to_contain_text("Species not found")
+
+
+def test_species_page_links_to_lookalikes(app, sp):
+    magpie = sp("Australian Magpie")
+    app.goto(f"/#/s/{magpie['id']}")
+    app.click("#look-link")
+    expect(app).to_have_url(re.compile(rf"#/id/{magpie['id']}$"))
 
 
 # ---------- species page ----------
@@ -187,11 +279,10 @@ def test_lightbox_large_image_crossorigin_matches_host(app, sp):
 
 # ---------- compare ----------
 
-def test_group_card_opens_comparison(app, groups, species):
+def test_group_comparison_shows_every_member(app, groups, species):
     g = groups["groups"][0]
     by_id = {s["id"]: s for s in species}
-    app.goto("/")
-    app.locator(".group-card", has_text=g["title"]).click()
+    app.goto(f"/#/c/{','.join(map(str, g['ids']))}?g=0")
     expect(app.locator("h1")).to_have_text(g["title"])
     expect(app.locator(".cmp-chips .chip a")).to_have_text([by_id[i]["common"] for i in g["ids"]])
     expect(app.locator("table.stats tr")).to_have_count(len(g["ids"]) + 1)

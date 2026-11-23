@@ -14,7 +14,7 @@ const CACHES = [SHELL, IMG, IMG_OPAQUE, API];
 const IMAGE_HOSTS = ['images.phylopic.org', 'inaturalist-open-data.s3.amazonaws.com', 'static.inaturalist.org'];
 const SHELL_FILES = [
   './', 'index.html', 'styles.css', 'app.js', 'lib.js', 'location.js', 'manifest.webmanifest',
-  'data/species.json', 'data/groups.json',
+  'data/species.json', 'data/groups.json', 'data/marks.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

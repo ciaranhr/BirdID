@@ -202,7 +202,9 @@ def test_offline_reload_with_real_worker(browser, base_url, groups):
         page.wait_for_function("async () => (await caches.keys()).includes('shell-dev')")
         ctx.set_offline(True)
         page.goto("/#/")
-        page.wait_for_selector(".group-card")
-        assert page.locator(".group-card").count() == len(groups["groups"])
+        page.wait_for_selector("#qres li a")
+        assert page.locator("#qres li a").count() == 40  # first page of the home bird list
+        page.goto("/#/id/8040")  # a look-alike page needs marks.json from the cache too
+        page.wait_for_selector("#key-card .couplet")
     finally:
         ctx.close()

@@ -9,6 +9,7 @@
   --sil: #2b302d;
   --sil-ref: #b9b5aa;
   --chip: #ece8de;
+  --hl-bg: #fbecd9;
   --c0: #d0662b; --c1: #2f78bd; --c2: #8b55c4; --c3: #2a9467; --c4: #b8456b;
   --radius: 14px;
   --safe-b: env(safe-area-inset-bottom, 0px);
@@ -17,11 +18,12 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #121614; --card: #1b201d; --ink: #e9ece8; --muted: #9aa49e; --line: #2c332f;
-    --brand: #0d1a14; --sil: #e6e9e4; --sil-ref: #4c544f; --chip: #252b28;
+    --brand: #0d1a14; --sil: #e6e9e4; --sil-ref: #4c544f; --chip: #252b28; --hl-bg: #3a2a1c;
     --c0: #f08a4b; --c1: #5aa2e6; --c2: #b38be8; --c3: #4cc08e; --c4: #e57a9c;
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -97,17 +99,33 @@ main { max-width: 760px; margin: 0 auto; padding: .9rem .9rem 3rem; outline: non
 .results .names b { font-weight: 600; }
 .results .names i { color: var(--muted); font-size: .82rem; }
 
-/* ---------- groups list ---------- */
-.cat-title { margin: 1.2rem 0 .5rem; font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.group-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .6rem; }
-.group-card {
-  display: flex; align-items: center; gap: .7rem; text-decoration: none;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: .55rem .7rem;
+/* ---------- home ---------- */
+.home-note { margin: .6rem .2rem .1rem; }
+.results .keybadge {
+  margin-left: auto; flex: none; font-size: .7rem; font-weight: 600; letter-spacing: .02em;
+  padding: .12rem .45rem; border-radius: 999px; background: var(--chip); color: var(--accent); border: 1px solid var(--line);
 }
-.stack { display: flex; flex: none; width: 86px; }
-.stack img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--card); background: var(--chip); }
-.stack img + img { margin-left: -14px; }
-.group-card span { font-weight: 600; font-size: .95rem; }
+.more-wrap { text-align: center; margin-top: .8rem; }
+
+/* ---------- ID key ---------- */
+.key { font-size: .95rem; }
+.couplet .key-q { font-weight: 600; margin: .15rem 0 .2rem; }
+.couplet ul { list-style: none; margin: 0; padding: 0 0 0 .75rem; border-left: 2px solid var(--line); }
+.couplet li { margin: .35rem 0; }
+.couplet li > .couplet { margin: .3rem 0 0 .2rem; }
+.key-a { background: var(--chip); border-radius: 8px; padding: .05rem .45rem; }
+.key-tip a { font-weight: 600; text-decoration: none; color: var(--accent); }
+.key-tip a.me { text-decoration: underline; }
+.key-tip .unk { color: var(--muted); margin-left: 1px; cursor: help; }
+
+.table-scroll { overflow-x: auto; overscroll-behavior-x: contain; margin: 0 -.9rem; padding: 0 .9rem; }
+table.marks { border-collapse: collapse; font-size: .84rem; min-width: 100%; }
+table.marks th, table.marks td { padding: .4rem .45rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.marks thead th { font-weight: 600; min-width: 7.5rem; }
+table.marks thead th.me { color: var(--accent); }
+table.marks tbody th { font-weight: 600; color: var(--muted); white-space: nowrap; position: sticky; left: 0; background: var(--card); }
+table.marks tr.diff td { background: var(--hl-bg); }
+table.marks tr.diff th { color: var(--ink); }
 
 /* ---------- species page ---------- */
 .hero { display: flex; gap: .9rem; align-items: center; margin-bottom: .9rem; }

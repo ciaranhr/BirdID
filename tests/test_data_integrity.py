@@ -121,3 +121,49 @@ def test_manifest_icons_exist():
         manifest = json.load(f)
     for icon in manifest["icons"]:
         assert os.path.isfile(os.path.join(APP, icon["src"])), icon["src"]
+
+
+@pytest.fixture(scope="module")
+def marks():
+    return load("marks.json")
+
+
+def test_every_confusion_group_bird_has_field_marks(groups, marks, by_id):
+    missing = {by_id[i]["common"] for g in groups["groups"] for i in g["ids"] if str(i) not in marks["marks"]}
+    assert not missing
+
+
+def test_field_marks_are_well_formed(marks, by_id):
+    keys = [t["key"] for t in marks["traits"]]
+    assert len(set(keys)) == len(keys) and "size" not in keys  # 'size' is computed by the app
+    for sid, m in marks["marks"].items():
+        assert int(sid) in by_id, sid
+        assert isinstance(m["ok"], bool)
+        for t in [m["t"], *m.get("p", {}).values()]:
+            for k, v in t.items():
+                assert k in keys and isinstance(v, str) and v.strip() == v and v, (by_id[int(sid)]["common"], k, v)
+
+
+# Plumages that genuinely can't be told apart by the recorded marks (the group tips say so).
+KNOWN_UNSEPARATED = set()
+
+
+def test_each_group_key_separates_its_birds(groups, marks, by_id):
+    """Within each curated group, every pair of birds must differ on at least one recorded trait
+    (or in length by the key's size ratio), otherwise the key ends in 'not separated'."""
+    for g in groups["groups"]:
+        leaves = []
+        for i in g["ids"]:
+            m = marks["marks"][str(i)]
+            for t in (m.get("p") or {"": {}}).values():
+                leaves.append((by_id[i], {**m["t"], **t}))
+        for a in range(len(leaves)):
+            for b in range(a + 1, len(leaves)):
+                (sa, ta), (sb, tb) = leaves[a], leaves[b]
+                if sa["id"] == sb["id"]:
+                    continue
+                differs = any(k in ta and k in tb and ta[k].lower() != tb[k].lower() for k in ta)
+                lens = sorted(x for x in (sa["len"], sb["len"]) if x)
+                differs |= len(lens) == 2 and lens[1] / lens[0] >= 1.3
+                pair = tuple(sorted((sa["common"], sb["common"])))
+                assert differs or pair in KNOWN_UNSEPARATED, f"{g['title']}: {sa['common']} vs {sb['common']}"

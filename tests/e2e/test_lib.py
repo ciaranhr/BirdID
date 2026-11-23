@@ -111,3 +111,78 @@ def test_nearest_benchmarks(lib):
 def test_is_hybrid(lib):
     assert lib("L.isHybrid", {"sci": "Anas superciliosa × platyrhynchos"}) is True
     assert lib("L.isHybrid", {"sci": "Anas superciliosa"}) is False
+
+
+# ---------- ID key ----------
+
+TRAITS = [{"key": "bill", "label": "Bill colour", "tier": 0}, {"key": "eye", "label": "Eye", "tier": 0},
+          {"key": "call", "label": "Call", "tier": 2}]
+
+
+def sp_(i, name, length=None):
+    return {"id": i, "common": name, "len": length}
+
+
+def test_mark_leaves_expand_plumages_with_species_defaults(lib):
+    species = [sp_(1, "Wren"), sp_(2, "Robin"), sp_(3, "No marks")]
+    marks = {"1": {"t": {"call": "trill"}, "p": {"male": {"bill": "black"}, "female": {"bill": "brown"}}, "ok": False},
+             "2": {"t": {"bill": "black"}, "ok": True}}
+    leaves = lib("(sp, m) => L.markLeaves(sp, m).map((l) => [l.label, l.plumage, l.t, l.ok])", species, marks)
+    assert leaves == [["Wren (male)", "male", {"call": "trill", "bill": "black"}, False],
+                      ["Wren (female)", "female", {"call": "trill", "bill": "brown"}, False],
+                      ["Robin", "", {"bill": "black"}, True]]
+
+
+KEY_TO_TEXT = """(leaves, traits) => {
+  const walk = (n) => n.trait
+    ? { q: n.trait.label, a: n.branches.map((b) => [b.value, b.unknown.map((l) => l.label), walk(b.node)]) }
+    : n.leaves.map((l) => l.label);
+  return walk(L.buildKey(leaves.map((l) => ({ s: { len: l.len || null }, label: l.label, t: l.t })), traits));
+}"""
+
+
+def leaf(label, length=None, **t):
+    return {"label": label, "len": length, "t": t}
+
+
+def test_key_picks_the_most_even_split_and_is_case_insensitive(lib):
+    leaves = [leaf("A", bill="black", eye="red"), leaf("B", bill="Black", eye="white"),
+              leaf("C", bill="pale", eye="yellow")]
+    # eye splits 1/1/1, bill only 2/1
+    assert lib(KEY_TO_TEXT, leaves, TRAITS) == {"q": "Eye", "a": [["red", [], ["A"]], ["white", [], ["B"]], ["yellow", [], ["C"]]]}
+    two = [leaf("A", bill="black"), leaf("B", bill="BLACK "), leaf("C", bill="pale")]
+    assert lib(KEY_TO_TEXT, two, TRAITS)["a"][0][:2] == ["black", []]
+
+
+def test_key_prefers_visible_marks_over_call_on_equal_splits(lib):
+    leaves = [leaf("A", bill="black", call="x"), leaf("B", bill="pale", call="y")]
+    assert lib(KEY_TO_TEXT, leaves, TRAITS)["q"] == "Bill colour"
+
+
+def test_key_sends_unknown_leaves_down_every_branch(lib):
+    leaves = [leaf("A", eye="red"), leaf("B", eye="white"), leaf("C", bill="black"), leaf("D", bill="pale")]
+    key = lib(KEY_TO_TEXT, leaves, TRAITS)
+    # every trait has 2 unknowns; the first equally good one (bill) is used, A and B under each answer
+    assert key["q"] == "Bill colour"
+    (v1, unk1, sub1), (v2, unk2, sub2) = key["a"]
+    assert unk1 == unk2 == ["A", "B"]
+    assert sub1["q"] == "Eye"
+
+
+def test_key_stops_when_nothing_separates(lib):
+    assert lib(KEY_TO_TEXT, [leaf("A", bill="black"), leaf("B", bill="black")], TRAITS) == ["A", "B"]
+    assert lib(KEY_TO_TEXT, [leaf("A")], TRAITS) == ["A"]
+
+
+def test_key_splits_on_size_only_with_a_clear_gap(lib):
+    big_gap = [leaf("Small", 20, bill="black"), leaf("Big", 30, bill="black")]
+    assert lib(KEY_TO_TEXT, big_gap, TRAITS) == {"q": "Size", "a": [
+        ["smaller (up to 20 cm)", [], ["Small"]], ["larger (30 cm or more)", [], ["Big"]]]}
+    close = [leaf("A", 20, bill="black"), leaf("B", 24, bill="black")]
+    assert lib(KEY_TO_TEXT, close, TRAITS) == ["A", "B"]
+
+
+def test_compare_rows_flag_differences_first(lib):
+    leaves = [{"t": {"bill": "black", "eye": "red"}}, {"t": {"bill": "black", "eye": "White"}}]
+    rows = lib("(l, t) => L.compareRows(l, t).map((r) => [r.key, r.cells, r.differs])", leaves, TRAITS)
+    assert rows == [["eye", ["red", "White"], True], ["bill", ["black", "black"], False]]
